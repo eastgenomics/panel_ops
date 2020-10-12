@@ -6,7 +6,7 @@ import MySQLdb
 from .utils import get_date, check_if_seen_before
 
 
-def generate_panelapp_dump(all_panels: dict):
+def generate_panelapp_dump(all_panels: dict, type_panel: str):
     """ Generate tsv for every panelapp panel
 
     Args:
@@ -16,7 +16,7 @@ def generate_panelapp_dump(all_panels: dict):
         str: Location where the panels will be written
     """
 
-    output_folder = "{}_panelapp_test_dump".format(get_date())
+    output_folder = f"{get_date()}_panelapp_{type_panel}_dump"
 
     for panel_id, panel in all_panels.items():
         print(panel)
