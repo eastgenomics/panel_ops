@@ -26,9 +26,17 @@ def main(**param):
             ops.check.check_test_against_db(cursor, test2targets)
 
     elif param["command"] == "generate":
-        if param["panelapp_folder"] is True:
+        if param["panelapp_all"] is True:
+            all_panels = ops.utils.get_all_panels()
+            panelapp_dump = ops.generate.generate_panelapp_dump(
+                all_panels, "all"
+            )
+
+        if param["panelapp_gms"] is True:
             gms_panels = ops.utils.get_GMS_panels()
-            panelapp_dump = ops.generate.generate_panelapp_dump(gms_panels)
+            panelapp_dump = ops.generate.generate_panelapp_dump(
+                gms_panels, "GMS"
+            )
 
         if param["json"]:
             (
@@ -71,8 +79,12 @@ if __name__ == "__main__":
 
     generate = subparser.add_parser("generate")
     generate.add_argument(
-        "-f", "--panelapp_folder", action="store_true",
-        help="Generate panelapp dump"
+        "-gms", "--panelapp_gms", action="store_true",
+        help="Generate panelapp GMS dump"
+    )
+    generate.add_argument(
+        "-all", "--panelapp_all", action="store_true",
+        help="Generate all panelapp dump"
     )
     generate.add_argument(
         "-j", "--json",

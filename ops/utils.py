@@ -75,7 +75,7 @@ def connect_to_db():
     return c
 
 
-def get_GMS_panels():
+def get_all_panels():
     """ Return dict of panelapp_id to panel object
 
     Returns:
@@ -89,6 +89,16 @@ def get_GMS_panels():
         all_panels[panel_id] = panel
 
     return all_panels
+
+
+def get_GMS_panels():
+    """ Return dict of panelapp_id to panel object
+
+    Returns:
+        dict: Dict of GMS panels in panelapp
+    """
+
+    return queries.get_all_signedoff_panels()
 
 
 def parse_HGMD():
@@ -383,8 +393,12 @@ def clean_targets(test2targets: dict):
 
         if "WES" in method:
             clean_test2targets[test]["method"] = "WES"
+
         elif "panel" in method:
-            clean_test2targets[test]["method"] = "P"
+            match = regex.search(r"(.*)[pP]anel", method)
+            type_panel = match.groups()[0][0]
+            clean_test2targets[test]["method"] = f"{type_panel}P"
+
         elif "gene" in method:
             clean_test2targets[test]["method"] = "G"
 
