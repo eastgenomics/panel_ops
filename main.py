@@ -26,6 +26,11 @@ def main(**param):
             ops.check.check_test_against_db(cursor, test2targets)
 
     elif param["command"] == "generate":
+        if param["g2t"]:
+            ops.generate.get_all_transcripts(
+                param["g2t"], hgmd_dict, nirvana_dict
+            )
+
         if param["panelapp_all"] is True:
             all_panels = ops.utils.get_all_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
@@ -85,6 +90,9 @@ if __name__ == "__main__":
     generate.add_argument(
         "-all", "--panelapp_all", action="store_true",
         help="Generate all panelapp dump"
+    )
+    generate.add_argument(
+        "-g2t", "--g2t", help="Genes2transcript file"
     )
     generate.add_argument(
         "-j", "--json",

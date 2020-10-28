@@ -3,7 +3,7 @@ import os
 
 import MySQLdb
 
-from .utils import get_date, check_if_seen_before
+from .utils import get_date, check_if_seen_before, assign_transcript
 
 
 def generate_panelapp_dump(all_panels: dict, type_panel: str):
@@ -79,6 +79,31 @@ def generate_genepanels(c):
                 f.write(f"{panels[panel_id]}\t{genes[gene_id]}\n")
 
     return output_file
+
+
+def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
+    genes = []
+
+    with open(g2t) as f:
+        for line in f:
+            gene, transcript = line.strip().split()
+            genes.append(gene)
+
+    no_transcript_file = open(f"{get_date()}_no_transcript_gene", "w")
+    transcript_file = open(f"{get_date()}_g2t", "w")
+
+    for gene in genes:
+        transcript_dict, clinical_transcript = assign_transcript(
+            gene, hgmd_dict, nirvana_dict
+        )
+
+        if transcript_dict:
+            transcript_file.write(f"{gene}\t{clinical_transcript}\n")
+        else:
+            no_transcript_file.write(f"{gene}\n")
+
+    no_transcript_file.close()
+    transcript_file.close()
 
 
 def write_django_jsons(json_lists: list):
