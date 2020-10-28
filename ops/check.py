@@ -20,7 +20,7 @@ def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
 
     if transcript_dict:
         print(
-            f"Clinical transcript for {gene}is: {clinical_transcript}"
+            f"Clinical transcript for {gene} is: {clinical_transcript}"
         )
         for tx in transcript_dict:
             print(tx)
