@@ -82,6 +82,14 @@ def generate_genepanels(c):
 
 
 def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
+    """ Generate g2t file and genes that have no transcripts file
+
+    Args:
+        g2t (str): g2t file (gene\ttranscript)
+        hgmd_dict (dict): HGMD dict
+        nirvana_dict (dict): nirvana dict
+    """
+
     genes = []
 
     with open(g2t) as f:
