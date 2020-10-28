@@ -374,7 +374,7 @@ def parse_tests_xls(file: str):
 
 def clean_targets(test2targets: dict):
     """ Replace the methods from the XLS to abbreviation:
-    WES and co -> WES
+    WES and co -> P
     Panel -> P
     Single Gene -> G
 
@@ -392,7 +392,7 @@ def clean_targets(test2targets: dict):
         method = test2targets[test]["method"]
 
         if "WES" in method:
-            clean_test2targets[test]["method"] = "WES"
+            clean_test2targets[test]["method"] = "P"
 
         elif "panel" in method:
             match = regex.search(r"(.*)[pP]anel", method)
