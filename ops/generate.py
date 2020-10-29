@@ -2,6 +2,7 @@ import json
 import os
 
 import MySQLdb
+from panelapp import queries
 
 from .utils import get_date, check_if_seen_before, assign_transcript
 
@@ -79,6 +80,28 @@ def generate_genepanels(c):
                 f.write(f"{panels[panel_id]}\t{genes[gene_id]}\n")
 
     return output_file
+
+
+def generate_gms_panels(confidence_level: int = 3):
+    """ Generate gene files for GMS panels
+
+    Args:
+        confidence_level (int, optional): Confidence level of genes to get. Defaults to 3.
+    """
+
+    out_folder = f"{get_date()}_gms_panels"
+
+    if not os.path.exists(out_folder) and not os.path.isdir(out_folder):
+        os.mkdir(out_folder)
+
+    signedoff = queries.get_all_signedoff_panels()
+
+    for panel_id, panel in signedoff.items():
+        panel_file = f"{panel.get_name()}_{panel.get_version()}"
+
+        with open(f"{out_folder}/{panel_file}", "w") as f:
+            for gene in panel.get_genes(confidence_level):
+                f.write(f"{gene}\n")
 
 
 def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):

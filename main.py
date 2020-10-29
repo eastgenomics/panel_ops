@@ -31,6 +31,9 @@ def main(**param):
                 param["g2t"], hgmd_dict, nirvana_dict
             )
 
+        if param["gene_files"]:
+            ops.generate.generate_gms_panels()
+
         if param["panelapp_all"] is True:
             all_panels = ops.utils.get_all_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
@@ -93,6 +96,10 @@ if __name__ == "__main__":
     )
     generate.add_argument(
         "-g2t", "--g2t", help="Genes2transcript file"
+    )
+    generate.add_argument(
+        "-gf", "--gene_files", action="store_true",
+        help="Generate gene files for GMS panels"
     )
     generate.add_argument(
         "-j", "--json",
