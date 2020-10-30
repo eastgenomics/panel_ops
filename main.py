@@ -3,6 +3,7 @@
 import argparse
 
 import ops
+from config_panel_db import user, passwd
 
 
 def main(**param):
@@ -12,40 +13,57 @@ def main(**param):
     test2targets = ops.utils.clean_targets(test_dict)
 
     if param["command"] == "check":
+        # check which transcript given was assigned
         if param["gene"]:
             ops.check.check_gene(param["gene"], hgmd_dict, nirvana_dict)
 
+        # Check integrity of database for all things panel
         if param["panel"]:
-            cursor = ops.utils.connect_to_db()
-            ops.check.check_panelapp_dump_against_db(
-                param["panel"], cursor, hgmd_dict, nirvana_dict
+            session, meta = ops.utils.connect_to_db(user, passwd)
+            check = ops.check.check_panelapp_dump_against_db(
+                param["panel"], session, meta, hgmd_dict, nirvana_dict
             )
 
+            if check is True:
+                print("Check completed and nothing bad to report")
+
+        # Check integrity of database for tests
         if param["test"]:
-            cursor = ops.utils.connect_to_db()
-            ops.check.check_test_against_db(cursor, test2targets)
+            session, meta = ops.utils.connect_to_db(user, passwd)
+            check = ops.check.check_test_against_db(
+                session, meta, test2targets
+            )
+
+            if check is True:
+                print("Check completed and nothing bad to report")
 
     elif param["command"] == "generate":
+        # Generate g2t + genes without transcript files
         if param["g2t"]:
             ops.generate.get_all_transcripts(
                 param["g2t"], hgmd_dict, nirvana_dict
             )
 
+        # Generate gms panel files with only green genes
         if param["gene_files"]:
-            ops.generate.generate_gms_panels()
+            gms_panels = ops.utils.get_GMS_panels()
+            ops.generate.generate_gms_panels(gms_panels)
 
+        # Generate panelapp dump
         if param["panelapp_all"] is True:
             all_panels = ops.utils.get_all_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 all_panels, "all"
             )
 
+        # Generate panelapp dump for GMS panels
         if param["panelapp_gms"] is True:
             gms_panels = ops.utils.get_GMS_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 gms_panels, "GMS"
             )
 
+        # Generate django fixture using given panelapp dump
         if param["json"]:
             (
                 panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
@@ -58,13 +76,15 @@ def main(**param):
             )
             ops.generate.write_django_jsons(json_lists)
 
+        # Generate genepanels file from database
         if param["genepanels"]:
-            cursor = ops.utils.connect_to_db()
-            ops.generate.generate_genepanels(cursor)
+            session, meta = ops.utils.connect_to_db(user, passwd)
+            ops.generate.generate_genepanels(session, meta)
 
+        # Generate gemini name file from database
         if param["gemini"]:
-            cursor = ops.utils.connect_to_db()
-            ops.generate.generate_gemini_names(cursor, test2targets)
+            session, meta = ops.utils.connect_to_db(user, passwd)
+            ops.generate.generate_gemini_names(session, meta, test2targets)
 
     elif param["command"] == "update":
         (
@@ -106,7 +126,7 @@ if __name__ == "__main__":
         help="Panelapp dump to generate json to import data directly"
     )
     generate.add_argument(
-        "-g", "--genepanels", action="store_true",
+        "-gp", "--genepanels", action="store_true",
         help="Generate genepanels"
     )
     generate.add_argument(
