@@ -1,7 +1,3 @@
-import os
-
-import MySQLdb
-
 from .utils import assign_transcript, create_panelapp_dict
 
 
@@ -34,12 +30,15 @@ def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
         print(f"No transcript for {gene}")
 
 
-def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict: dict):
+def check_panelapp_dump_against_db(
+    folder: str, session, meta, hgmd_dict: dict, nirvana_dict: dict
+):
     """ Check that the data in the panelapp dump is the same as what's in the db
 
     Args:
         folder (str): Folder in which panels are stored
-        c (MySQLdb cursor): Cursor connected to panel_database
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
         hgmd_dict (dict): Dict of data stored in HGMD
         nirvana_dict (dict): Dict of parsed data from Nirvana GFF
     """
@@ -48,38 +47,52 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
         panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
     ) = create_panelapp_dict(folder, hgmd_dict, nirvana_dict)
 
-    # Get the ids for the references for use with strs and cnvs
-    c.execute("SELECT id FROM reference WHERE name=%s", ("GRCh37",))
-    grch37_id = c.fetchone()[0]
+    ref_tb = meta.tables["reference"]
+    panel_tb = meta.tables["panel"]
+    gene_tb = meta.tables["gene"]
+    panel_gene_tb = meta.tables["panel_gene"]
+    transcript_tb = meta.tables["transcript"]
+    exon_tb = meta.tables["exon"]
+    region_tb = meta.tables["region"]
+    str_tb = meta.tables["str"]
+    region_str_tb = meta.tables["region_str"]
+    cnv_tb = meta.tables["cnv"]
+    region_cnv_tb = meta.tables["region_cnv"]
 
-    c.execute("SELECT id FROM reference WHERE name=%s", ("GRCh38",))
-    grch38_id = c.fetchone()[0]
+    # Get the ids for the references for use with strs and cnvs
+    grch37_id = session.query(ref_tb.c.id).filter(
+        ref_tb.c.name == "GRCh37").one()[0]
+
+    grch38_id = session.query(ref_tb.c.id).filter(
+        ref_tb.c.name == "GRCh38").one()[0]
 
     # Get all panels using panelapp ids in panelapp dict
     panel_values = [int(id_) for id_ in panelapp_dict.keys()]
-    c.execute("SELECT * FROM panel WHERE panelapp_id IN %s", (panel_values,))
-    db_panels = c.fetchall()
+    db_panels = session.query(panel_tb).filter(
+        panel_tb.c.panelapp_id.in_(panel_values)
+    ).all()
 
     if len(db_panels) == len(panelapp_dict):
         print("Panels are good")
     else:
         print("Panels are bad")
-
     for panel_row in db_panels:
         panel_id, panelapp_id, name, version, signedoff = panel_row
         print(name)
 
         # Get all genes for that panel
         gene_values = list(panelapp_dict[str(panelapp_id)]["genes"])
-        c.execute("SELECT * FROM gene WHERE symbol IN %s", (gene_values, ))
-        db_genes = c.fetchall()
+        db_genes = session.query(gene_tb).filter(
+            gene_tb.c.symbol.in_(gene_values)
+        ).all()
 
         # Get all panel2gene links for that panel
-        panel_genes = (panel_id, )
-        c.execute("SELECT * FROM panel_gene WHERE panel_id=%s", panel_genes)
-        db_panel_genes = c.fetchall()
+        db_panel_genes = session.query(panel_gene_tb).filter(
+            panel_gene_tb.c.panel_id == panel_id
+        ).all()
 
         if len(db_panel_genes) != len(db_genes):
+            print("Nb of genes")
             print(len(db_genes))
             print(len(db_panel_genes))
             return
@@ -94,11 +107,9 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                     tx.split(".")[0]
                     for tx in transcript_data.keys()
                 ]
-                c.execute(
-                    "SELECT * FROM transcript WHERE refseq IN %s",
-                    (refseq_values, )
-                )
-                db_transcripts = c.fetchall()
+                db_transcripts = session.query(transcript_tb).filter(
+                    transcript_tb.c.refseq.in_(refseq_values)
+                ).all()
 
                 if len(transcript_data) != len(db_transcripts):
                     print("Nb transcripts")
@@ -114,11 +125,10 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
 
                     # Get exons for the transcritps
                     exon_values = [int(nb) for nb in exon_data.keys()]
-                    c.execute(
-                        "SELECT * FROM exon WHERE number IN %s AND transcript_id=%s",
-                        (exon_values, tx_id)
-                    )
-                    db_exons = c.fetchall()
+                    db_exons = session.query(exon_tb).filter(
+                        exon_tb.c.number.in_(exon_values),
+                        exon_tb.c.transcript_id == tx_id
+                    ).all()
 
                     if len(db_exons) != len(exon_data):
                         print("Nb exons")
@@ -128,11 +138,12 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                         return
 
                     # Get all regions for the transcripts
-                    c.execute(
-                        "SELECT * FROM region WHERE id IN (SELECT region_id FROM exon WHERE transcript_id=%s)",
-                        (tx_id, )
+                    exon_query = session.query(exon_tb.c.region_id).filter(
+                        exon_tb.c.transcript_id == tx_id
                     )
-                    db_regions = c.fetchall()
+                    db_regions = session.query(region_tb).filter(
+                        region_tb.c.id.in_(exon_query)
+                    ).all()
 
                     if len(db_regions) != len(exon_data):
                         print("Nb of regions")
@@ -164,8 +175,9 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
         str_values = list(panelapp_dict[str(panelapp_id)]["strs"])
 
         if str_values:
-            c.execute("SELECT * FROM str WHERE name IN %s", (str_values, ))
-            db_strs = c.fetchall()
+            db_strs = session.query(str_tb).filter(
+                str_tb.c.id.in_(str_values)
+            ).all()
 
             for str_row in db_strs:
                 (
@@ -173,8 +185,8 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                     nb_patho_repeats, gene_id
                 ) = str_row
 
-                c.execute("SELECT symbol FROM gene WHERE id=%s", (gene_id, ))
-                symbol = c.fetchone()[0]
+                symbol = session.query(gene_tb.c.symbol).filter(
+                    gene_tb.c.id == gene_id).one()[0]
 
                 if symbol != str_dict[name]["gene"]:
                     print(f"Gene associated with {name} is not correct:")
@@ -192,11 +204,14 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                     print(str_row)
                     return
 
-                c.execute(
-                    "SELECT * FROM region WHERE id IN (SELECT region_id FROM region_str WHERE str_id=%s)",
-                    (str_id, )
+                reg_str_query = session.query(
+                    region_str_tb.c.region_id
+                ).filter(
+                    region_str_tb.c.str_id == str_id
                 )
-                associated_regions = c.fetchall()
+                associated_regions = session.query(region_tb).filter(
+                    region_tb.c.id.in_(reg_str_query)
+                ).all()
 
                 for region in associated_regions:
                     region_id, db_chrom, db_start, db_end, ref = region
@@ -213,8 +228,9 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
         cnv_values = list(panelapp_dict[str(panelapp_id)]["cnvs"])
 
         if cnv_values:
-            c.execute("SELECT * FROM cnv WHERE name IN %s", (cnv_values, ))
-            db_cnvs = c.fetchall()
+            db_cnvs = session.query(cnv_tb).filter(
+                cnv_tb.c.name.in_(cnv_values)
+            ).all()
 
             for cnv_row in db_cnvs:
                 (cnv_id, name, variant_type) = cnv_row
@@ -225,11 +241,14 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                     print(variant_type)
                     return
 
-                c.execute(
-                    "SELECT * FROM region WHERE id IN (SELECT region_id FROM region_cnv WHERE cnv_id=%s)",
-                    (cnv_id, )
+                reg_cnv_query = session.query(
+                    region_cnv_tb.c.region_id
+                ).filter(
+                    region_cnv_tb.c.cnv_id == cnv_id
                 )
-                associated_regions = c.fetchall()
+                associated_regions = session.query(region_tb).filter(
+                    region_tb.c.id.in_(reg_cnv_query)
+                ).all()
 
                 for region in associated_regions:
                     region_id, db_chrom, db_start, db_end, ref = region
@@ -243,20 +262,28 @@ def check_panelapp_dump_against_db(folder: str, c, hgmd_dict: dict, nirvana_dict
                             print("CNV GRCh38")
                             print(region_dict[db_chrom]["GRCh38"])
 
-    return
+    return True
 
 
-def check_test_against_db(c, test2target: dict):
+def check_test_against_db(session, meta, test2target: dict):
     """Check if the tests have been imported correctly
 
     Args:
-        c (MySQLdb cursor): Cursor connected to panel_database
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
         test2target (dict): Dict of test2target
     """
 
+    test_tb = meta.tables["test"]
+    test_panel_tb = meta.tables["test_panel"]
+    panel_tb = meta.tables["panel"]
+    test_gene_tb = meta.tables["test_gene"]
+    gene_tb = meta.tables["gene"]
+
     test_ids = [test for test in test2target]
-    c.execute("SELECT * FROM test WHERE test_id IN %s", (test_ids, ))
-    db_tests = c.fetchall()
+    db_tests = session.query(test_tb).filter(
+        test_tb.c.test_id.in_(test_ids)
+    ).all()
 
     # Check if the number of imported tests is the same as the number of tests in the xls
     if len(test2target) != len(db_tests):
@@ -272,19 +299,22 @@ def check_test_against_db(c, test2target: dict):
         # If the test has panels associated to it
         if panel_targets != []:
             # Get the panels associated to the test in the db
-            c.execute(
-                "SELECT * FROM test_panel WHERE test_id=%s", (db_test_id, )
-            )
-            db_panel_targets = c.fetchall()
+            db_panel_targets = session.query(test_panel_tb).filter(
+                test_panel_tb.c.test_id == db_test_id
+            ).all()
 
             # From the associated panels, check if the panelapp id imported is the same as the one in the xls
             for panel_target in db_panel_targets:
                 test_panel_id, panel_id, db_test_id = panel_target
-                c.execute("SELECT * FROM panel WHERE id=%s", (panel_id, ))
-                id_, panelapp_id, name, version, signedoff = c.fetchone()
+                panelapp_id = session.query(panel_tb.c.panelapp_id).filter(
+                    panel_tb.c.id == panel_id
+                ).one()[0]
 
                 if str(panelapp_id) not in test2target[test_id]["panels"]:
                     print("Panel is bad")
+                    print(panel_id)
+                    print(panelapp_id)
+                    print(test2target[test_id]["panels"])
                     return
 
         gene_targets = test2target[test_id]["genes"]
@@ -292,17 +322,19 @@ def check_test_against_db(c, test2target: dict):
         # If the test has genes associated to it
         if gene_targets != []:
             # Get the genes associated to the test in the db
-            c.execute(
-                "SELECT * FROM test_gene WHERE test_id=%s", (db_test_id, )
-            )
-            db_gene_targets = c.fetchall()
+            db_gene_targets = session.query(test_gene_tb).filter(
+                test_gene_tb.c.test_id == db_test_id
+            ).all()
 
             # From the associated genes, check if the gene imported is the same as the one(s) in the xls
             for gene_target in db_gene_targets:
                 test_panel_id, gene_id, db_test_id = gene_target
-                c.execute("SELECT * FROM gene WHERE id=%s", (gene_id, ))
-                id_, symbol, clin_tx_id = c.fetchone()
+                symbol = session.query(gene_tb.c.symbol).filter(
+                    gene_tb.c.id == gene_id
+                ).one()[0]
 
                 if symbol not in test2target[test_id]["genes"]:
                     print("Gene is bad")
                     return
+
+    return True
