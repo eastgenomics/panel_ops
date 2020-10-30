@@ -1,9 +1,6 @@
 import json
 import os
 
-import MySQLdb
-from panelapp import queries
-
 from .utils import get_date, check_if_seen_before, assign_transcript
 
 
@@ -26,11 +23,12 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
     return output_folder
 
 
-def generate_genepanels(c):
+def generate_genepanels(session, meta):
     """ Generate gene panels file
 
     Args:
-        c (MySQLdd cursor): Cursor connected to panel_database
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
 
     Returns:
         str: Output file
@@ -40,31 +38,19 @@ def generate_genepanels(c):
     gene_panels = {}
     genes = {}
 
-    # Get the panel ids and store it
-    c.execute(
-        """SELECT id, name from panel;"""
-    )
+    panel_table = meta.tables["panel"]
+    gene_table = meta.tables["gene"]
+    panel_gene_table = meta.tables["panel_gene"]
 
-    for panel in c.fetchall():
-        panel_id, name = panel
+    for panel_id, name in session.query(panel_table.c.id, panel_table.c.name):
         panels[panel_id] = name
 
-    # Get the gene ids and store it
-    c.execute(
-        """SELECT id, symbol from gene;"""
-    )
-
-    for gene in c.fetchall():
-        gene_id, symbol = gene
+    for gene_id, symbol in session.query(gene_table.c.id, gene_table.c.symbol):
         genes[gene_id] = symbol
 
-    # Get the panel_gene ids and store it
-    c.execute(
-        """SELECT gene_id, panel_id from panel_gene;"""
-    )
-
-    for row in c.fetchall():
-        gene_id, panel_id = row
+    for gene_id, panel_id in session.query(
+        panel_gene_table.c.gene_id, panel_gene_table.c.panel_id
+    ):
         gene_panels.setdefault(panel_id, []).append(gene_id)
 
     if not os.path.exists("sql_dump"):
@@ -82,7 +68,7 @@ def generate_genepanels(c):
     return output_file
 
 
-def generate_gms_panels(confidence_level: int = 3):
+def generate_gms_panels(gms_panels, confidence_level: int = 3):
     """ Generate gene files for GMS panels
 
     Args:
@@ -94,9 +80,7 @@ def generate_gms_panels(confidence_level: int = 3):
     if not os.path.exists(out_folder) and not os.path.isdir(out_folder):
         os.mkdir(out_folder)
 
-    signedoff = queries.get_all_signedoff_panels()
-
-    for panel_id, panel in signedoff.items():
+    for panel_id, panel in gms_panels.items():
         panel_file = f"{panel.get_name()}_{panel.get_version()}"
 
         with open(f"{out_folder}/{panel_file}", "w") as f:
@@ -657,16 +641,18 @@ def create_django_json(
     }
 
 
-def generate_gemini_names(c, test2targets: dict):
+def generate_gemini_names(session, meta, test2targets: dict):
     """ Generate gemini names file
 
     Args:
-        c (MySQLdb cursor): Cursor connected to the panel_database
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
         test2targets (dict): Dict from the xls
     """
 
-    c.execute("SELECT gemini_name FROM test")
-    db_tests = c.fetchall()
+    test_table = meta.tables["test"]
+
+    db_tests = [row for row in session.query(test_table.c.gemini_name)]
 
     if len(db_tests) == len(test2targets):
         print("Nb of tests in db as expected")
