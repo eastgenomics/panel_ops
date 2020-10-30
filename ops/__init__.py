@@ -2,8 +2,9 @@ from .check import (
     check_gene, check_panelapp_dump_against_db
 )
 from .generate import (
-    generate_panelapp_dump, generate_genepanels, write_django_jsons,
-    get_django_json, create_django_json
+    generate_panelapp_dump, generate_genepanels, generate_gms_panels,
+    get_all_transcripts, write_django_jsons, get_django_json,
+    create_django_json
 )
 from .update import (
     update_django_tables
