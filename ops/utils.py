@@ -4,8 +4,10 @@ import gzip
 import os
 
 import dxpy
-import MySQLdb
 import regex
+import sqlalchemy
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql.schema import MetaData
 import vcf
 import xlrd
 
@@ -60,19 +62,21 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
-def connect_to_db():
+def connect_to_db(user, passwd):
     """ Return cursor of panel_database
 
     Returns:
-        MySQLdb cursor: Panel_database cursor
+        sqlalchemy cursor: Panel_database cursor
     """
 
-    db = MySQLdb.connect(
-        host="localhost", user="kimy",
-        passwd="panel_database", db="panel_database"
+    db = sqlalchemy.create_engine(
+        f"mysql://{user}:{passwd}@localhost/panel_database"
     )
-    c = db.cursor()
-    return c
+    meta = MetaData()
+    meta.reflect(bind=db)
+    Session = sessionmaker(bind=db)
+    session = Session()
+    return session, meta
 
 
 def get_all_panels():
