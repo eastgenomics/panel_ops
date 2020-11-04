@@ -14,7 +14,18 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
         str: Location where the panels will be written
     """
 
-    output_folder = f"{get_date()}_panelapp_{type_panel}_dump"
+    output_dump = f"{type_panel}_panelapp_dump"
+    output_date = f"{get_date()}"
+    output_folder = f"{output_dump}/{output_date}"
+
+    if not os.path.exists(output_dump) and not os.path.isdir(output_dump):
+        os.mkdir(output_dump)
+
+        if (
+            not os.path.exists(output_folder) and
+            not os.path.isdir(output_folder)
+        ):
+            os.mkdir(output_folder)
 
     for panel_id, panel in all_panels.items():
         print(panel)
