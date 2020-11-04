@@ -1,9 +1,13 @@
 #!/usr/bin/python3
 
 import argparse
+import sys
 
 import ops
-from config_panel_db import user, passwd, host
+
+sys.path.append("/home/egg-user/panels/panel_config")
+
+import config_panel_db
 
 
 def main(**param):
@@ -11,6 +15,10 @@ def main(**param):
     nirvana_dict = ops.utils.get_nirvana_data_dict(param["gff"])
     ci_dict, test_dict = ops.utils.parse_tests_xls(param["test_xls"])
     test2targets = ops.utils.clean_targets(test_dict)
+
+    user = config_panel_db.user_admin
+    passwd = config_panel_db.passwd_admin
+    host = config_panel_db.host
 
     if param["command"] == "check":
         # check which transcript given was assigned
