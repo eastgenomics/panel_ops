@@ -6,9 +6,9 @@ from .generate import (
     get_all_transcripts, write_django_jsons, get_django_json,
     create_django_json
 )
-from .update import (
-    update_django_tables
-)
+# from .update import (
+#     update_django_tables
+# )
 from .utils import (
     assign_transcript, get_date, connect_to_db, get_GMS_panels, parse_HGMD,
     get_nirvana_data_dict, create_panelapp_dict, check_if_seen_before,
