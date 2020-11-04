@@ -3,7 +3,7 @@
 import argparse
 
 import ops
-from config_panel_db import user, passwd
+from config_panel_db import user, passwd, host
 
 
 def main(**param):
@@ -19,7 +19,7 @@ def main(**param):
 
         # Check integrity of database for all things panel
         if param["panel"]:
-            session, meta = ops.utils.connect_to_db(user, passwd)
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
             check = ops.check.check_panelapp_dump_against_db(
                 param["panel"], session, meta, hgmd_dict, nirvana_dict
             )
@@ -29,7 +29,7 @@ def main(**param):
 
         # Check integrity of database for tests
         if param["test"]:
-            session, meta = ops.utils.connect_to_db(user, passwd)
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
             check = ops.check.check_test_against_db(
                 session, meta, test2targets
             )
@@ -78,12 +78,12 @@ def main(**param):
 
         # Generate genepanels file from database
         if param["genepanels"]:
-            session, meta = ops.utils.connect_to_db(user, passwd)
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
             ops.generate.generate_genepanels(session, meta)
 
         # Generate gemini name file from database
         if param["gemini"]:
-            session, meta = ops.utils.connect_to_db(user, passwd)
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
             ops.generate.generate_gemini_names(session, meta, test2targets)
 
     elif param["command"] == "update":

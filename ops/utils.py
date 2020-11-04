@@ -62,7 +62,7 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
-def connect_to_db(user, passwd):
+def connect_to_db(user, passwd, host):
     """ Return cursor of panel_database
 
     Returns:
@@ -70,7 +70,7 @@ def connect_to_db(user, passwd):
     """
 
     db = sqlalchemy.create_engine(
-        f"mysql://{user}:{passwd}@localhost/panel_database"
+        f"mysql://{user}:{passwd}@{host}/panel_database"
     )
     meta = MetaData()
     meta.reflect(bind=db)
