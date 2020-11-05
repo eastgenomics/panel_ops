@@ -71,6 +71,12 @@ def main(**param):
                 gms_panels, "GMS"
             )
 
+        if param["manifest"]:
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
+            sample2panels = ops.generate.generate_sample2panels(
+                session, meta, param["manifest"]
+            )
+
         # Generate django fixture using given panelapp dump
         if param["json"]:
             (
@@ -141,6 +147,7 @@ if __name__ == "__main__":
         "-gd", "--gemini", action="store_true",
         help="Generate dump of database of the gemini names"
     )
+    generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
 
     check = subparser.add_parser("check")
     check.add_argument(

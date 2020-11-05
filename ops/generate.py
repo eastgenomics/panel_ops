@@ -1,7 +1,10 @@
+from collections import defaultdict
 import json
 import os
 
-from .utils import get_date, check_if_seen_before, assign_transcript
+from .utils import (
+    get_date, check_if_seen_before, assign_transcript, parse_gemini_dump
+)
 
 
 def generate_panelapp_dump(all_panels: dict, type_panel: str):
@@ -675,7 +678,82 @@ def generate_gemini_names(session, meta, test2targets: dict):
     if not os.path.exists("sql_dump"):
         os.mkdir("sql_dump")
 
-    with open(f"sql_dump/{get_date()}_gemini_names.txt", "w") as f:
+    output_file = f"sql_dump/{get_date()}_gemini_names.txt"
+
+    with open(output_file, "w") as f:
         for test in db_tests:
             gemini_name = test[0]
             f.write(f"{gemini_name}\n")
+
+
+def generate_sample2panels(session, meta, gemini_dump):
+    """ Generate new bioinformatic manifest for the new database
+
+    Args:
+        session (SQLAlchemy Session): Session to make queries
+        meta (SQLAlchemy metadata): Metadata to get the tables from the existing db
+        gemini_dump (file_path): Gemini dump file
+
+    Returns:
+        str: File path of the output file
+    """
+
+    # get the content of the gemini dump
+    sample2gm_panels = parse_gemini_dump(gemini_dump)
+
+    # get the panels/genes from the db now
+    test_table = meta.tables["test"]
+    test_panel_table = meta.tables["test_panel"]
+    test_gene_table = meta.tables["test_gene"]
+    panel_gene_table = meta.tables["panel_gene"]
+    gene_table = meta.tables["gene"]
+
+    uniq_used_panels = set(sample2gm_panels.values())
+
+    # get the gemini names and associated genes and panels ids
+    test_queries = session.query(
+        test_table.c.gemini_name,
+        test_gene_table.c.gene_id,
+        test_panel_table.c.panel_id
+    ).outerjoin(test_panel_table).outerjoin(test_gene_table).filter(
+        test_table.c.gemini_name.in_(uniq_used_panels)
+    ).all()
+
+    gemini2genes = defaultdict(lambda: set())
+
+    for test in test_queries:
+        gemini_name, gene_id, panel_id = test
+
+        # query genes from test_gene output
+        if gene_id:
+            gene = session.query(gene_table.c.symbol).filter(
+                gene_table.c.id == gene_id
+            ).one()[0]
+
+            gemini2genes[gemini_name].update([gene])
+
+        # query genes from test_panel output
+        elif panel_id:
+            panels_genes = session.query(
+                gene_table.c.symbol
+            ).outerjoin(panel_gene_table).filter(
+                panel_gene_table.c.panel_id == panel_id
+            ).all()
+
+            panels_genes = [gene[0] for gene in panels_genes]
+
+            gemini2genes[gemini_name].update(panels_genes)
+
+    if not os.path.exists("sql_dump"):
+        os.mkdir("sql_dump")
+
+    output_file = f"sql_dump/{get_date()}_sample2panels.tsv"
+
+    with open(output_file, "w") as f:
+        for sample, panel in sample2gm_panels.items():
+            # match gemini names from the dump to the genes in the db
+            if panel in gemini2genes:
+                for gene in gemini2genes[panel]:
+                    f.write(f"{sample}\t{panel}\tNA\t{gene}\n")
+
+    return output_file

@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import datetime
 import gzip
 import os
@@ -420,3 +420,21 @@ def clean_targets(test2targets: dict):
                     clean_test2targets[test]["genes"].append(target_to_add)
 
     return clean_test2targets
+
+
+def parse_gemini_dump(gemini_dump):
+    sample2panels = {}
+
+    # windows encoding otherwise it breaks
+    with open(gemini_dump, encoding="cp1252") as f:
+        for index, line in enumerate(f):
+            line = line.strip().split(",")
+
+            if index == 0:
+                headers = {ele: j for j, ele in enumerate(line)}
+            else:
+                sample2panels[line[headers["ExomeNumber"]]] = (
+                    line[headers["PanelDescription"]]
+                )
+
+    return OrderedDict(sorted(sample2panels.items(), key=lambda t: t[0]))
