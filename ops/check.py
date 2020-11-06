@@ -1,4 +1,4 @@
-from .utils import assign_transcript, create_panelapp_dict
+from .utils import assign_transcript
 
 
 def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
@@ -31,7 +31,7 @@ def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
 
 
 def check_panelapp_dump_against_db(
-    folder: str, session, meta, hgmd_dict: dict, nirvana_dict: dict
+    folder: str, session, meta, data_dicts: tuple
 ):
     """ Check that the data in the panelapp dump is the same as what's in the db
 
@@ -44,11 +44,13 @@ def check_panelapp_dump_against_db(
     """
 
     (
-        panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
-    ) = create_panelapp_dict(folder, hgmd_dict, nirvana_dict)
+        panelapp_dict, superpanel_dict, gene_dict, str_dict,
+        cnv_dict, region_dict
+    ) = data_dicts
 
     ref_tb = meta.tables["reference"]
     panel_tb = meta.tables["panel"]
+    superpanel_tb = meta.tables["superpanel"]
     gene_tb = meta.tables["gene"]
     panel_gene_tb = meta.tables["panel_gene"]
     transcript_tb = meta.tables["transcript"]
@@ -66,6 +68,49 @@ def check_panelapp_dump_against_db(
     grch38_id = session.query(ref_tb.c.id).filter(
         ref_tb.c.name == "GRCh38").one()[0]
 
+    # Check superpanels
+    # Query db for superpanels
+    superpanel_values = [int(id_) for id_ in superpanel_dict.keys()]
+    db_superpanels = session.query(panel_tb).filter(
+        panel_tb.c.panelapp_id.in_(superpanel_values)
+    ).all()
+
+    if len(db_superpanels) == len(superpanel_dict):
+        print("|| Superpanels are good ||")
+    else:
+        print("|| Superpanels are bad ||")
+        return
+
+    # Check subpanels associated to superpanels
+    for superpanel_row in db_superpanels:
+        (
+            superpanel_id, panelapp_id, name, version, signedoff, superpanel
+        ) = superpanel_row
+        print(name)
+
+        superpanel_query = session.query(superpanel_tb.c.panel_id).filter(
+            superpanel_tb.c.superpanel_id == superpanel_id
+        ).all()
+
+        subpanels = [ele[0] for ele in superpanel_query]
+
+        subpanel_query = session.query(panel_tb).filter(
+            panel_tb.c.id.in_(subpanels)
+        ).all()
+
+        subpanel_dict = superpanel_dict[str(panelapp_id)]["subpanels"]
+
+        for subpanel_row in subpanel_query:
+            (
+                subpanel_id, sub_panelapp_id, sub_name,
+                version, signedoff, superpanel
+            ) = subpanel_row
+
+            if sub_name != subpanel_dict[str(sub_panelapp_id)]["name"]:
+                print("|| Subpanel ||")
+                print(sub_name, subpanel_dict[str(sub_panelapp_id)]["name"])
+                return
+
     # Get all panels using panelapp ids in panelapp dict
     panel_values = [int(id_) for id_ in panelapp_dict.keys()]
     db_panels = session.query(panel_tb).filter(
@@ -73,11 +118,13 @@ def check_panelapp_dump_against_db(
     ).all()
 
     if len(db_panels) == len(panelapp_dict):
-        print("Panels are good")
+        print("|| Panels are good ||")
     else:
-        print("Panels are bad")
+        print("|| Panels are bad ||")
+        return
+
     for panel_row in db_panels:
-        panel_id, panelapp_id, name, version, signedoff = panel_row
+        panel_id, panelapp_id, name, version, signedoff, superpanel = panel_row
         print(name)
 
         # Get all genes for that panel
@@ -92,7 +139,7 @@ def check_panelapp_dump_against_db(
         ).all()
 
         if len(db_panel_genes) != len(db_genes):
-            print("Nb of genes")
+            print("|| Nb of genes ||")
             print(len(db_genes))
             print(len(db_panel_genes))
             return
@@ -112,7 +159,7 @@ def check_panelapp_dump_against_db(
                 ).all()
 
                 if len(transcript_data) != len(db_transcripts):
-                    print("Nb transcripts")
+                    print("|| Nb transcripts ||")
                     print(symbol)
                     print(db_transcripts)
                     print(transcript_data.keys())
@@ -131,7 +178,7 @@ def check_panelapp_dump_against_db(
                     ).all()
 
                     if len(db_exons) != len(exon_data):
-                        print("Nb exons")
+                        print("|| Nb exons ||")
                         print(tx)
                         print(db_exons)
                         print(exon_data)
@@ -146,7 +193,7 @@ def check_panelapp_dump_against_db(
                     ).all()
 
                     if len(db_regions) != len(exon_data):
-                        print("Nb of regions")
+                        print("|| Nb of regions ||")
                         print(tx)
                         print(len(exon_data))
                         print(exon_data)
@@ -167,7 +214,7 @@ def check_panelapp_dump_against_db(
                         region_id, db_chrom, db_start, db_end, ref = region
 
                         if (db_chrom, db_start, db_end) not in exons:
-                            print("Region")
+                            print("|| Region ||")
                             print(exons)
                             print((db_chrom, db_start, db_end))
                             return
@@ -189,7 +236,7 @@ def check_panelapp_dump_against_db(
                     gene_tb.c.id == gene_id).one()[0]
 
                 if symbol != str_dict[name]["gene"]:
-                    print(f"Gene associated with {name} is not correct:")
+                    print(f"|| Gene associated with {name} is not correct: ||")
                     print(symbol)
                     print(str_dict[name]["gene"])
                     return
@@ -199,7 +246,7 @@ def check_panelapp_dump_against_db(
                     str(nb_repeats) != str_dict[name]["nb_normal_repeats"] or
                     str(nb_patho_repeats) != str_dict[name]["nb_pathogenic_repeats"]
                 ):
-                    print("STR")
+                    print("|| STR ||")
                     print(str_dict[name])
                     print(str_row)
                     return
@@ -218,11 +265,11 @@ def check_panelapp_dump_against_db(
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            print("STR GRCh37")
+                            print("|| STR GRCh37 ||")
                             print(region_dict[db_chrom]["GRCh37"])
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            print("STR GRCh38")
+                            print("|| STR GRCh38 ||")
                             print(region_dict[db_chrom]["GRCh38"])
 
         cnv_values = list(panelapp_dict[str(panelapp_id)]["cnvs"])
@@ -236,7 +283,7 @@ def check_panelapp_dump_against_db(
                 (cnv_id, name, variant_type) = cnv_row
 
                 if (variant_type != cnv_dict[name]["type"]):
-                    print("CNV")
+                    print("|| CNV ||")
                     print(cnv_dict[name])
                     print(variant_type)
                     return
@@ -255,11 +302,11 @@ def check_panelapp_dump_against_db(
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            print("CNV GRCh37")
+                            print("|| CNV GRCh37 ||")
                             print(region_dict[db_chrom]["GRCh37"])
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            print("CNV GRCh38")
+                            print("|| CNV GRCh38 ||")
                             print(region_dict[db_chrom]["GRCh38"])
 
     return True
