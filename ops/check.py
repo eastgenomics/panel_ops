@@ -39,8 +39,7 @@ def check_panelapp_dump_against_db(
         folder (str): Folder in which panels are stored
         session (SQLAlchemy session): Session object
         meta (SQLAlchemy MetaData): Metadata object
-        hgmd_dict (dict): Dict of data stored in HGMD
-        nirvana_dict (dict): Dict of parsed data from Nirvana GFF
+        data_dicts (tuple): Tuple of dicts
     """
 
     (

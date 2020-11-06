@@ -365,6 +365,7 @@ def clean_targets(ci_dict: dict, test2targets: dict):
     Single Gene -> G
 
     Args:
+        ci_dict (dict): Dict of the clinical indication
         test2targets (dict): Dict of test_id2targets
 
     Returns:
@@ -420,7 +421,16 @@ def clean_targets(ci_dict: dict, test2targets: dict):
     return clean_test2targets
 
 
-def parse_coor(chrom, coordinates):
+def parse_coor(chrom: str, coordinates: tuple):
+    """ Parse coordinates from panelapp
+
+    Args:
+        chrom (str): Gene chromosome
+        coordinates (tuple): Tuple of start, end
+
+    Returns:
+        tuple: Tuple of tuple for coordinates and bool for the region check
+    """
     if coordinates != "None":
         start_grch, end_grch = coordinates.strip("[]").split(",")
         start_grch = start_grch.strip()
@@ -439,6 +449,15 @@ def parse_coor(chrom, coordinates):
 
 
 def parse_gemini_dump(gemini_dump):
+    """ Parse the Gemini database dump
+
+    Args:
+        gemini_dump (str): Path to the gemini dump (CSV)
+
+    Returns:
+        OrderedDict: OrderedDict containing the sample2panels data
+    """
+
     sample2panels = {}
 
     # windows encoding otherwise it breaks

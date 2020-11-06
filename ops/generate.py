@@ -13,6 +13,7 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
 
     Args:
         all_panels (dict): Dict of all panels in panelapp
+        type_panel (str): Type of panels between GMS and all panels
 
     Returns:
         str: Location where the panels will be written
