@@ -227,13 +227,13 @@ def create_panelapp_dict(
                             panel_signedoff, subpanel_id, subpanel, version
                         ) = line.strip().split("\t")
 
-                        panel_dict = superpanel_dict[panel_id]
-                        panel_dict["subpanels"][subpanel_id]["name"] = subpanel
-                        panel_dict["subpanels"][subpanel_id]["id"] = subpanel_id
-                        panel_dict["subpanels"][subpanel_id]["version"] = version
-                        panel_dict["name"] = panel_name
-                        panel_dict["version"] = panel_version
-                        panel_dict["signedoff"] = panel_signedoff
+                        su_panel_dict = superpanel_dict[panel_id]
+                        su_panel_dict["subpanels"][subpanel_id]["name"] = subpanel
+                        su_panel_dict["subpanels"][subpanel_id]["id"] = subpanel_id
+                        su_panel_dict["subpanels"][subpanel_id]["version"] = version
+                        su_panel_dict["name"] = panel_name
+                        su_panel_dict["version"] = panel_version
+                        su_panel_dict["signedoff"] = panel_signedoff
                 else:
                     for line in f:
                         line = line.strip().split("\t")
@@ -319,7 +319,10 @@ def create_panelapp_dict(
                             cnv_dict[name]["grch38"] = extracted_grch38
                             region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
 
-    return panelapp_dict, superpanel_dict, gene_dict, str_dict, cnv_dict, region_dict
+    return (
+        panelapp_dict, superpanel_dict, gene_dict,
+        str_dict, cnv_dict, region_dict
+    )
 
 
 def parse_tests_xls(file: str):
