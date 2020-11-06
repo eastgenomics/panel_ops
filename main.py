@@ -14,7 +14,7 @@ def main(**param):
     hgmd_dict = ops.utils.parse_HGMD()
     nirvana_dict = ops.utils.get_nirvana_data_dict(param["gff"])
     ci_dict, test_dict = ops.utils.parse_tests_xls(param["test_xls"])
-    test2targets = ops.utils.clean_targets(test_dict)
+    test2targets = ops.utils.clean_targets(ci_dict, test_dict)
 
     user = config_panel_db.user_admin
     passwd = config_panel_db.passwd_admin
@@ -28,12 +28,15 @@ def main(**param):
         # Check integrity of database for all things panel
         if param["panel"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
+            panelapp_dicts = ops.utils.create_panelapp_dict(
+                param["panel"], hgmd_dict, nirvana_dict
+            )
             check = ops.check.check_panelapp_dump_against_db(
-                param["panel"], session, meta, hgmd_dict, nirvana_dict
+                param["panel"], session, meta, panelapp_dicts
             )
 
             if check is True:
-                print("Check completed and nothing bad to report")
+                print("|| Check completed and nothing bad to report ||")
 
         # Check integrity of database for tests
         if param["test"]:
@@ -80,13 +83,14 @@ def main(**param):
         # Generate django fixture using given panelapp dump
         if param["json"]:
             (
-                panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
+                panelapp_dict, superpanel_dict, gene_dict,
+                str_dict, cnv_dict, region_dict
             ) = ops.utils.create_panelapp_dict(
                 param["json"], hgmd_dict, nirvana_dict
             )
             json_lists = ops.generate.create_django_json(
-                ci_dict, test2targets, panelapp_dict, gene_dict, str_dict,
-                cnv_dict, region_dict
+                ci_dict, test2targets, panelapp_dict, superpanel_dict,
+                gene_dict, str_dict, cnv_dict, region_dict
             )
             ops.generate.write_django_jsons(json_lists)
 
@@ -102,7 +106,8 @@ def main(**param):
 
     elif param["command"] == "update":
         (
-            panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
+            panelapp_dict, superpanel_dict, gene_dict,
+            str_dict, cnv_dict, region_dict
         ) = ops.utils.create_panelapp_dict(
             param["panelapp_dump"], hgmd_dict, nirvana_dict
         )
