@@ -13,6 +13,8 @@ import xlrd
 
 from panelapp import queries
 
+from .hardcoded_tests import tests as hd_tests
+
 
 def assign_transcript(gene: str, hgmd_dict: dict, nirvana_dict: dict):
     """ Return transcript data and clinical transcript from hgmd/nirvana
@@ -204,6 +206,9 @@ def create_panelapp_dict(
     """
 
     panelapp_dict = defaultdict(lambda: defaultdict(set))
+    superpanel_dict = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
+    )
     # The following dicts will contain a key called "check" for knowing whether the entity has been seen before
     gene_dict = defaultdict(lambda: defaultdict(None))
     str_dict = defaultdict(lambda: defaultdict(None))
@@ -212,135 +217,109 @@ def create_panelapp_dict(
 
     if os.path.exists(dump_folder) and os.path.isdir(dump_folder):
         for file in os.listdir(dump_folder):
-            with open("{}/{}".format(dump_folder, file)) as f:
-                for line in f:
-                    line = line.strip().split("\t")
-                    panel_name, panel_id, version, signedoff, entity_type = line[0:5]
-                    panel_dict = panelapp_dict[panel_id]
+            panel_path = f"{dump_folder}/{file}"
 
-                    panel_dict["name"] = panel_name
-                    panel_dict["version"] = version
-                    panel_dict["signedoff"] = signedoff
-
-                    if entity_type == "gene":
-                        gene = line[5]
-
-                        transcript2exon, clinical_transcript = assign_transcript(
-                            gene, hgmd_dict, nirvana_dict
-                        )
-
-                        panel_dict["genes"].add(gene)
-                        gene_dict[gene]["check"] = False
-
-                        if transcript2exon and clinical_transcript:
-                            gene_dict[gene]["transcripts"] = transcript2exon
-                            gene_dict[gene]["clinical"] = clinical_transcript
-
-                            for transcript in transcript2exon:
-                                for exon_nb in transcript2exon[transcript]["exons"]:
-                                    chrom = transcript2exon[transcript]["exons"][exon_nb]["chrom"]
-                                    start = transcript2exon[transcript]["exons"][exon_nb]["start"]
-                                    end = transcript2exon[transcript]["exons"][exon_nb]["end"]
-                                    region_dict[chrom]["GRCh37"][(start, end)] = False
-                        else:
-                            gene_dict[gene]["transcripts"] = None
-                            gene_dict[gene]["clinical"] = None
-
-                    elif entity_type == "str":
+            with open(panel_path) as f:
+                if file.endswith("_superpanel.tsv"):
+                    for line in f:
                         (
-                            name, gene, seq, nb_normal_repeats,
-                            nb_pathogenic_repeats, chrom,
-                            grch37_coor, grch38_coor
-                        ) = line[5:]
+                            panel_id, panel_name, panel_version,
+                            panel_signedoff, subpanel_id, subpanel, version
+                        ) = line.strip().split("\t")
 
-                        panel_dict["strs"].add(name)
-
-                        str_dict[name]["check"] = False
-                        str_dict[name]["gene"] = gene
-                        str_dict[name]["seq"] = seq
-                        str_dict[name]["nb_normal_repeats"] = nb_normal_repeats
-                        str_dict[name]["nb_pathogenic_repeats"] = nb_pathogenic_repeats
-
-                        if grch37_coor != "None":
-                            start_grch37, end_grch37 = grch37_coor.strip("[]").split(",")
-                            start_grch37 = start_grch37.strip()
-                            end_grch37 = end_grch37.strip()
-                            str_dict[name]["grch37"] = (
-                                chrom, start_grch37, end_grch37
-                            )
-                            region_dict[chrom]["GRCh37"][(start_grch37, end_grch37)] = False
-                        else:
-                            str_dict[name]["grch37"] = (
-                                chrom, None, None
-                            )
-
-                        if grch38_coor != "None":
-                            start_grch38, end_grch38 = grch38_coor.strip("[]").split(",")
-                            start_grch38 = start_grch38.strip()
-                            end_grch38 = end_grch38.strip()
-                            str_dict[name]["grch38"] = (
-                                chrom, start_grch38, end_grch38
-                            )
-                            region_dict[chrom]["GRCh38"][(start_grch38, end_grch38)] = False
-                        else:
-                            str_dict[name]["grch38"] = (
-                                chrom, None, None
-                            )
-
-                    elif entity_type == "cnv":
+                        panel_dict = superpanel_dict[panel_id]
+                        panel_dict["subpanels"][subpanel_id]["name"] = subpanel
+                        panel_dict["subpanels"][subpanel_id]["id"] = subpanel_id
+                        panel_dict["subpanels"][subpanel_id]["version"] = version
+                        panel_dict["name"] = panel_name
+                        panel_dict["version"] = panel_version
+                        panel_dict["signedoff"] = panel_signedoff
+                else:
+                    for line in f:
+                        line = line.strip().split("\t")
                         (
-                            name, type_variant, chrom,
-                            grch37_coor, grch38_coor
-                        ) = line[5:]
+                            panel_name, panel_id, version,
+                            signedoff, entity_type
+                        ) = line[0:5]
 
-                        panel_dict["cnvs"].add(name)
+                        panel_dict = panelapp_dict[panel_id]
+                        panel_dict["name"] = panel_name
+                        panel_dict["version"] = version
+                        panel_dict["signedoff"] = signedoff
 
-                        cnv_dict[name]["check"] = False
-                        cnv_dict[name]["type"] = type_variant
+                        if entity_type == "gene":
+                            gene = line[5]
 
-                        if grch37_coor != "None":
-                            start_grch37, end_grch37 = grch37_coor.strip("[]").split(",")
-                            start_grch37 = start_grch37.strip()
-                            end_grch37 = end_grch37.strip()
-                            cnv_dict[name]["grch37"] = (
-                                chrom, start_grch37, end_grch37
-                            )
-                            region_dict[chrom]["GRCh37"][(start_grch37, end_grch37)] = False
-                        else:
-                            cnv_dict[name]["grch37"] = (
-                                chrom, None, None
+                            transcript2exon, clinical_transcript = assign_transcript(
+                                gene, hgmd_dict, nirvana_dict
                             )
 
-                        if grch38_coor != "None":
-                            start_grch38, end_grch38 = grch38_coor.strip("[]").split(",")
-                            start_grch38 = start_grch38.strip()
-                            end_grch38 = end_grch38.strip()
-                            cnv_dict[name]["grch38"] = (
-                                chrom, start_grch38, end_grch38
+                            panel_dict["genes"].add(gene)
+                            gene_dict[gene]["check"] = False
+
+                            if transcript2exon and clinical_transcript:
+                                gene_dict[gene]["transcripts"] = transcript2exon
+                                gene_dict[gene]["clinical"] = clinical_transcript
+
+                                for transcript in transcript2exon:
+                                    for exon_nb in transcript2exon[transcript]["exons"]:
+                                        chrom = transcript2exon[transcript]["exons"][exon_nb]["chrom"]
+                                        start = transcript2exon[transcript]["exons"][exon_nb]["start"]
+                                        end = transcript2exon[transcript]["exons"][exon_nb]["end"]
+                                        region_dict[chrom]["GRCh37"][(start, end)] = False
+                            else:
+                                gene_dict[gene]["transcripts"] = None
+                                gene_dict[gene]["clinical"] = None
+
+                        elif entity_type == "str":
+                            (
+                                name, gene, seq, nb_normal_repeats,
+                                nb_pathogenic_repeats, chrom,
+                                grch37_coor, grch38_coor
+                            ) = line[5:]
+
+                            str_dict[name]["check"] = False
+                            str_dict[name]["gene"] = gene
+                            str_dict[name]["seq"] = seq
+                            str_dict[name]["nb_normal_repeats"] = nb_normal_repeats
+                            str_dict[name]["nb_pathogenic_repeats"] = nb_pathogenic_repeats
+
+                            extracted_grch37, region_check_37 = parse_coor(
+                                chrom, grch37_coor
                             )
-                            region_dict[chrom]["GRCh38"][(start_grch38, end_grch38)] = False
-                        else:
-                            cnv_dict[name]["grch38"] = (
-                                chrom, None, None
+                            str_dict[name]["grch37"] = extracted_grch37
+                            region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
+
+                            extracted_grch38, region_check_38 = parse_coor(
+                                chrom, grch38_coor
                             )
+                            str_dict[name]["grch38"] = extracted_grch38
+                            region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
 
-    return panelapp_dict, gene_dict, str_dict, cnv_dict, region_dict
+                        elif entity_type == "cnv":
+                            (
+                                name, type_variant, chrom,
+                                grch37_coor, grch38_coor
+                            ) = line[5:]
 
+                            panel_dict["cnvs"].add(name)
 
-def check_if_seen_before(value_to_check):
-    """ Return if the entity has been seen before
+                            cnv_dict[name]["check"] = False
+                            cnv_dict[name]["type"] = type_variant
 
-    Args:
-        value_to_check: dict["check"]
+                            extracted_grch37, region_check_37 = parse_coor(
+                                chrom, grch37_coor
+                            )
+                            cnv_dict[name]["grch37"] = extracted_grch37
+                            region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
 
-    Returns:
-        bool
-    """
+                            extracted_grch38, region_check_38 = parse_coor(
+                                chrom, grch38_coor
+                            )
+                            cnv_dict[name]["grch38"] = extracted_grch38
+                            region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
 
-    if value_to_check is False:
-        return False
-    else:
-        return True
+    return panelapp_dict, superpanel_dict, gene_dict, str_dict, cnv_dict, region_dict
 
 
 def parse_tests_xls(file: str):
@@ -376,7 +355,7 @@ def parse_tests_xls(file: str):
     return ci_id2ci, test_id2targets
 
 
-def clean_targets(test2targets: dict):
+def clean_targets(ci_dict: dict, test2targets: dict):
     """ Replace the methods from the XLS to abbreviation:
     WES and co -> P
     Panel -> P
@@ -392,6 +371,8 @@ def clean_targets(test2targets: dict):
     clean_test2targets = defaultdict(lambda: defaultdict(list))
 
     for test in test2targets:
+        clinind_id, test_id = test.split(".")
+        clinind = ci_dict[clinind_id]
         targets = test2targets[test]["targets"]
         method = test2targets[test]["method"]
 
@@ -406,20 +387,52 @@ def clean_targets(test2targets: dict):
         elif "gene" in method:
             clean_test2targets[test]["method"] = "G"
 
+        cleaned_method = clean_test2targets[test]["method"]
+
+        clean_test2targets[test]["gemini_name"] = (
+            f"{test}_{clinind}_{cleaned_method}"
+        )
+
         for indiv_target in targets.split(";"):
             indiv_target = indiv_target.strip()
 
             if "Relevant" not in indiv_target:
+                # check if the target has parentheses with numbers in there
                 match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
 
+                # it's a panel
                 if match:
                     target_to_add = match.group("panel_id").strip("()")
                     clean_test2targets[test]["panels"].append(target_to_add)
+
+                # it's a gene
                 else:
                     target_to_add = indiv_target.strip()
                     clean_test2targets[test]["genes"].append(target_to_add)
 
+        if test in hd_tests:
+            clean_test2targets[test]["panels"] = hd_tests[test]["panels"]
+            clean_test2targets[test]["gemini_name"] = hd_tests[test]["gemini_name"]
+
     return clean_test2targets
+
+
+def parse_coor(chrom, coordinates):
+    if coordinates != "None":
+        start_grch, end_grch = coordinates.strip("[]").split(",")
+        start_grch = start_grch.strip()
+        end_grch = end_grch.strip()
+        extracted_coor = (
+            chrom, start_grch, end_grch
+        )
+        region_check = False
+    else:
+        extracted_coor = (
+            chrom, None, None
+        )
+        region_check = None
+
+    return (extracted_coor, region_check)
 
 
 def parse_gemini_dump(gemini_dump):
