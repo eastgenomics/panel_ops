@@ -26,10 +26,12 @@ Python packages specified in the requirements.txt
 Usage:
 
 ```python3
-python main.py generate -all GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs panelapp panels in folder ${day}_panelapp_dump
+python main.py generate -all GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs all panelapp panels in folder ${day}_panelapp_dump
+python main.py generate -gms GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs gms panelapp panels in folder ${day}_panelapp_dump
 python main.py generate -j 201020_panelapp_dump GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
-python main.py generate -g GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_genepanels
+python main.py generate -g GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_genepanels.tsv
 python main.py generate -gd GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_gemini_names.txt
+python main.py generate -m gemini_dump GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_sample2genes.tsv
 
 python main.py check -g BRCA1 GRCh_37_nirvana.gff.gz National_test_directory.xls
 python main.py check -p 201020_panelapp_dump GRCh_37_nirvana.gff.gz National_test_directory.xls
