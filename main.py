@@ -80,6 +80,18 @@ def main(**param):
                 session, meta, param["manifest"]
             )
 
+        if param["panel_names_gms"]:
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
+            panel_file = ops.generate.generate_panel_names(
+                session, meta, gms=True
+            )
+
+        if param["panel_names_all"]:
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
+            panel_file = ops.generate.generate_panel_names(
+                session, meta, gms=False
+            )
+
         # Generate django fixture using given panelapp dump
         if param["json"]:
             (
@@ -153,6 +165,14 @@ if __name__ == "__main__":
         help="Generate dump of database of the gemini names"
     )
     generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
+    generate.add_argument(
+        "-pn_gms", "--panel_names_gms", action="store_true",
+        help="Write gms panel names in a file"
+    )
+    generate.add_argument(
+        "-pn_all", "--panel_names_all", action="store_true",
+        help="Gemini database xls dump"
+    )
 
     check = subparser.add_parser("check")
     check.add_argument(
