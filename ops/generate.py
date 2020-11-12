@@ -794,3 +794,39 @@ def generate_sample2panels(session, meta, gemini_dump):
                     f.write(f"{sample}\t{panel}\tNA\t{gene}\n")
 
     return output_file
+
+
+def generate_panel_names(session, meta, gms):
+    """ Generate txt file with all the panel names
+
+    Args:
+        session (): [description]
+        meta ([type]): [description]
+        gms ([type]): [description]
+    """
+
+    panel_table = meta.tables["panel"]
+
+    if gms is True:
+        test_queries = sorted(session.query(
+            panel_table.c.name, panel_table.c.version
+        ).filter(
+            panel_table.c.signedoff != "False"
+        ).all(), key=lambda t: t[0])
+        output_file = f"sql_dump/{get_date()}_gms_panels.txt"
+    elif gms is False:
+        test_queries = sorted(session.query(
+            panel_table.c.name, panel_table.c.version
+        ).all(), key=lambda t: t[0])
+        output_file = f"sql_dump/{get_date()}_all_panels.txt"
+    else:
+        test_queries = None
+        output_file = None
+
+    if not os.path.exists("sql_dump"):
+        os.mkdir("sql_dump")
+
+    with open(output_file, "w") as f:
+        for row in test_queries:
+            name, version = row
+            f.write(f"{name}_{version}\n")
