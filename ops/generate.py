@@ -3,9 +3,13 @@ import json
 import os
 
 from .hardcoded_tests import tests as hd_tests
+from .logger import setup_logging
 from .utils import (
     get_date, assign_transcript, parse_gemini_dump
 )
+
+
+LOGGER = setup_logging("generation")
 
 
 def generate_panelapp_dump(all_panels: dict, type_panel: str):
@@ -18,6 +22,8 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
     Returns:
         str: Location where the panels will be written
     """
+
+    LOGGER.info(f"Creating '{type_panel}' panelapp dump")
 
     output_dump = f"{type_panel}_panelapp_dump"
     output_date = f"{get_date()}"
@@ -33,8 +39,6 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
             os.mkdir(output_folder)
 
     for panel_id, panel in all_panels.items():
-        print(panel)
-
         if panel.is_superpanel():
             subpanels = panel.get_subpanels()
             superpanel_output = (
@@ -51,6 +55,8 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
         else:
             panel.write(output_folder)
 
+    LOGGER.info(f"Created panelapp dump: {output_folder}")
+
     return output_folder
 
 
@@ -64,6 +70,8 @@ def generate_genepanels(session, meta):
     Returns:
         str: Output file
     """
+
+    LOGGER.info("Creating genepanels file")
 
     panels = {}
     gene_panels = {}
@@ -96,6 +104,8 @@ def generate_genepanels(session, meta):
                 # Use the panel and gene ids to get panel name and gene symbol
                 f.write(f"{panels[panel_id]}\t{genes[gene_id]}\n")
 
+    LOGGER.info(f"Created genepanels file: {output_file}")
+
     return output_file
 
 
@@ -105,6 +115,8 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     Args:
         confidence_level (int, optional): Confidence level of genes to get. Defaults to 3.
     """
+
+    LOGGER.info("Creating gms panels")
 
     out_folder = f"{get_date()}_gms_panels"
 
@@ -118,6 +130,8 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
             for gene in panel.get_genes(confidence_level):
                 f.write(f"{gene}\n")
 
+    LOGGER.info(f"Created gms panels: {out_folder}")
+
 
 def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
     """ Generate g2t file and genes that have no transcripts file
@@ -127,6 +141,8 @@ def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
         hgmd_dict (dict): HGMD dict
         nirvana_dict (dict): nirvana dict
     """
+
+    LOGGER.info("Creating g2t file and no transcript file")
 
     genes = []
 
@@ -151,6 +167,12 @@ def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
     no_transcript_file.close()
     transcript_file.close()
 
+    msg = (
+        f"Created g2t file '{get_date()}_g2t' and no transcript file "
+        f"'{get_date()}_no_transcript_gene'"
+    )
+    LOGGER.info(msg)
+
 
 def write_django_jsons(json_lists: list):
     """ Write the jsons for every table in the panel_database + full json for importing in the database
@@ -161,6 +183,8 @@ def write_django_jsons(json_lists: list):
     Returns:
         str: Output folder
     """
+
+    LOGGER.info("Creating json dump for django import")
 
     today = get_date()
     all_elements = []
@@ -191,6 +215,10 @@ def write_django_jsons(json_lists: list):
             f"{output_django}/{today}/{table_output}", "w", encoding="utf-8"
         ) as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
+
+    LOGGER.info(
+        f"Created json dump for django import: {output_django}/{today}"
+    )
 
     return output_django
 
@@ -701,6 +729,8 @@ def generate_gemini_names(session, meta, test2targets: dict):
         test2targets (dict): Dict from the xls
     """
 
+    LOGGER.info("Creating gemini names file")
+
     test_table = meta.tables["test"]
 
     db_tests = [row for row in session.query(test_table.c.gemini_name)]
@@ -722,6 +752,8 @@ def generate_gemini_names(session, meta, test2targets: dict):
             gemini_name = test[0]
             f.write(f"{gemini_name}\n")
 
+    LOGGER.info(f"Created gemini names file: {output_file}")
+
 
 def generate_sample2panels(session, meta, gemini_dump):
     """ Generate new bioinformatic manifest for the new database
@@ -734,6 +766,8 @@ def generate_sample2panels(session, meta, gemini_dump):
     Returns:
         str: File path of the output file
     """
+
+    LOGGER.info("Creating sample2panels file")
 
     # get the content of the gemini dump
     sample2gm_panels = parse_gemini_dump(gemini_dump)
@@ -793,6 +827,8 @@ def generate_sample2panels(session, meta, gemini_dump):
                 for gene in gemini2genes[panel]:
                     f.write(f"{sample}\t{panel}\tNA\t{gene}\n")
 
+    LOGGER.info(f"Created sample2panels file: {output_file}")
+
     return output_file
 
 
@@ -804,6 +840,8 @@ def generate_panel_names(session, meta, gms):
         meta ([type]): [description]
         gms ([type]): [description]
     """
+
+    LOGGER.info("Creating panel names file")
 
     panel_table = meta.tables["panel"]
 
@@ -830,3 +868,5 @@ def generate_panel_names(session, meta, gms):
         for row in test_queries:
             name, version = row
             f.write(f"{name}_{version}\n")
+
+    LOGGER.info(f"Created panel names file: {output_file}")
