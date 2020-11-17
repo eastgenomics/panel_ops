@@ -2,6 +2,8 @@ import logging.config
 
 
 def setup_logging(type_logger):
+    path_to_logs = "/home/egg-user/panels/panel_logs"
+
     logging.config.dictConfig({
         "version": 1,
         "disable_existing_loggers": False,
@@ -24,7 +26,7 @@ def setup_logging(type_logger):
                 "level": "DEBUG",
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "normal",
-                "filename": "/home/kimy/NHS/Panelapp/panel_logs/panel_generation.log",
+                "filename": f"{path_to_logs}/panel_generation.log",
                 "mode": "a",
                 "maxBytes": 10000000,
                 "backupCount": 5,
@@ -33,7 +35,7 @@ def setup_logging(type_logger):
                 "level": "DEBUG",
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "normal",
-                "filename": "/home/kimy/NHS/Panelapp/panel_logs/panel_checking.log",
+                "filename": f"{path_to_logs}/panel_checking.log",
                 "mode": "a",
                 "maxBytes": 10000000,
                 "backupCount": 5,
@@ -42,7 +44,7 @@ def setup_logging(type_logger):
                 "level": "DEBUG",
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "normal",
-                "filename": "/home/kimy/NHS/Panelapp/panel_logs/panel_mod_db.log",
+                "filename": f"{path_to_logs}/panel_mod_db.log",
                 "mode": "a",
                 "maxBytes": 10000000,
                 "backupCount": 5,
