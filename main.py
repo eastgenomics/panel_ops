@@ -35,18 +35,12 @@ def main(**param):
                 param["panel"], session, meta, panelapp_dicts
             )
 
-            if check is True:
-                print("|| Check completed and nothing bad to report ||")
-
         # Check integrity of database for tests
         if param["test"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             check = ops.check.check_test_against_db(
                 session, meta, test2targets
             )
-
-            if check is True:
-                print("Check completed and nothing bad to report")
 
     elif param["command"] == "generate":
         # Generate g2t + genes without transcript files
@@ -116,14 +110,26 @@ def main(**param):
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             ops.generate.generate_gemini_names(session, meta, test2targets)
 
-    elif param["command"] == "update":
-        (
-            panelapp_dict, superpanel_dict, gene_dict,
-            str_dict, cnv_dict, region_dict
-        ) = ops.utils.create_panelapp_dict(
-            param["panelapp_dump"], hgmd_dict, nirvana_dict
-        )
-        ops.update.update_django_tables(panelapp_dict)
+    elif param["command"] == "query":
+        session, meta = ops.utils.connect_to_db(user, passwd, host)
+
+        if param["gemini_name"]:
+            ops.queries.get_gemini_name(session, meta, param["test"])
+        elif param["gene_test"]:
+            ops.queries.get_genes_from_gemini_name(
+                session, meta, param["gene_test"]
+            )
+
+    elif param["command"] == "mod_db":
+        if param["initial_import"]:
+            ops.mod_db.import_django_fixture(
+                param["initial_import"]
+            )
+        elif param["update"]:
+            data_dicts = ops.utils.create_panelapp_dict(
+                param["update"], hgmd_dict, nirvana_dict
+            )
+            ops.mod_db.update_django_tables(data_dicts)
 
 
 if __name__ == "__main__":
@@ -191,10 +197,24 @@ if __name__ == "__main__":
         help="Test that the tests has been correctly imported in the db"
     )
 
-    update = subparser.add_parser("update")
-    update.add_argument(
-        "panelapp_dump", action="store_true",
-        help="Update the database using the panels in the folder given in -p"
+    query = subparser.add_parser("query")
+    query.add_argument(
+        "-g", "--gemini_name",
+        help="Query to get gemini name from part of the gemini name"
+    )
+    query.add_argument(
+        "-t", "--gene_test",
+        help="Query the genes in a test code"
+    )
+
+    mod_db = subparser.add_parser("mod_db")
+    mod_db.add_argument(
+        "-i", "--initial_import",
+        help="Import pointed json in the database"
+    )
+    mod_db.add_argument(
+        "-u", "--update",
+        help="Update database using the given panel dump"
     )
 
     args = vars(parser.parse_args())
