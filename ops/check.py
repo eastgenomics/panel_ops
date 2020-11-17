@@ -1,4 +1,8 @@
-from .utils import assign_transcript
+from .logger import setup_logging
+from .utils import assign_transcript, get_date
+
+
+LOGGER = setup_logging("check")
 
 
 def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
@@ -30,9 +34,7 @@ def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
         print(f"No transcript for {gene}")
 
 
-def check_panelapp_dump_against_db(
-    folder: str, session, meta, data_dicts: tuple
-):
+def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
     """ Check that the data in the panelapp dump is the same as what's in the db
 
     Args:
@@ -75,17 +77,24 @@ def check_panelapp_dump_against_db(
     ).all()
 
     if len(db_superpanels) == len(superpanel_dict):
-        print("|| Superpanels are good ||")
+        db_superpanels_id = set([row[1] for row in db_superpanels])
+        superpanel_diff = db_superpanels_id.symmetric_difference(
+            set(superpanel_values)
+        )
+
+        if superpanel_diff:
+            msg = f"{superpanel_diff} is not present in both sets"
+            LOGGER.error(msg)
+            return
+
     else:
-        print("|| Superpanels are bad ||")
-        return
+        LOGGER.error("Expected nb of superpanels is incorrect")
 
     # Check subpanels associated to superpanels
     for superpanel_row in db_superpanels:
         (
-            superpanel_id, panelapp_id, name, version, signedoff, superpanel
+            superpanel_id, panelapp_id, panel_name, version, signedoff, superpanel
         ) = superpanel_row
-        print(name)
 
         superpanel_query = session.query(superpanel_tb.c.panel_id).filter(
             superpanel_tb.c.superpanel_id == superpanel_id
@@ -106,8 +115,11 @@ def check_panelapp_dump_against_db(
             ) = subpanel_row
 
             if sub_name != subpanel_dict[str(sub_panelapp_id)]["name"]:
-                print("|| Subpanel ||")
-                print(sub_name, subpanel_dict[str(sub_panelapp_id)]["name"])
+                msg = (
+                    f"{panel_name}: Subpanel '{sub_name}' is not equal to "
+                    f"what is expected for '{sub_panelapp_id}'"
+                )
+                LOGGER.error(msg)
                 return
 
     # Get all panels using panelapp ids in panelapp dict
@@ -117,14 +129,19 @@ def check_panelapp_dump_against_db(
     ).all()
 
     if len(db_panels) == len(panelapp_dict):
-        print("|| Panels are good ||")
+        db_panels_id = set([row[1] for row in db_panels])
+        panel_diff = db_panels_id.symmetric_difference(set(panel_values))
+
+        if panel_diff:
+            msg = f"{panel_diff} is not present in both sets"
+            LOGGER.error(msg)
+            return
     else:
-        print("|| Panels are bad ||")
+        LOGGER.error("Expected nb of panels is incorrect")
         return
 
     for panel_row in db_panels:
-        panel_id, panelapp_id, name, version, signedoff, superpanel = panel_row
-        print(name)
+        panel_id, panelapp_id, panel_name, version, signedoff, superpanel = panel_row
 
         # Get all genes for that panel
         gene_values = list(panelapp_dict[str(panelapp_id)]["genes"])
@@ -137,11 +154,23 @@ def check_panelapp_dump_against_db(
             panel_gene_tb.c.panel_id == panel_id
         ).all()
 
-        if len(db_panel_genes) != len(db_genes):
-            print("|| Nb of genes ||")
-            print(len(db_genes))
-            print(len(db_panel_genes))
+        if len(gene_values) != len(db_genes):
+            msg = (
+                f"{panel_name}: Number of genes is incorrect"
+            )
+            LOGGER.error(msg)
             return
+        else:
+            db_genes_symbols = set([row[1] for row in db_genes])
+            gene_diff = db_genes_symbols.symmetric_difference(
+                set(gene_values)
+            )
+
+            if gene_diff:
+                LOGGER.error(
+                    f"{panel_name}: {gene_diff} is not in both list of genes"
+                )
+                return
 
         for gene_row in db_genes:
             gene_id, symbol, clin_tx_id = gene_row
@@ -158,11 +187,27 @@ def check_panelapp_dump_against_db(
                 ).all()
 
                 if len(transcript_data) != len(db_transcripts):
-                    print("|| Nb transcripts ||")
-                    print(symbol)
-                    print(db_transcripts)
-                    print(transcript_data.keys())
+                    msg = (
+                        f"{panel_name} - {symbol}: Nb of transcripts is not "
+                        "what is excepted"
+                    )
+                    LOGGER.error(msg)
                     return
+                else:
+                    db_transcripts_refseq = set(
+                        [row[1] for row in db_transcripts]
+                    )
+                    tx_diff = db_transcripts_refseq.symmetric_difference(
+                        set(refseq_values)
+                    )
+
+                    if tx_diff:
+                        msg = (
+                            f"{panel_name} - {symbol}: {tx_diff} is not in "
+                            "both list of tx"
+                        )
+                        LOGGER.error(msg)
+                        return
 
                 for tx in db_transcripts:
                     tx_id, refseq, tx_version, tx_gene_id = tx
@@ -177,10 +222,11 @@ def check_panelapp_dump_against_db(
                     ).all()
 
                     if len(db_exons) != len(exon_data):
-                        print("|| Nb exons ||")
-                        print(tx)
-                        print(db_exons)
-                        print(exon_data)
+                        msg = (
+                            f"{panel_name} - {symbol} - Nb of exons for "
+                            f"'{refseq}' is not what is expected"
+                        )
+                        LOGGER.error(msg)
                         return
 
                     # Get all regions for the transcripts
@@ -192,12 +238,11 @@ def check_panelapp_dump_against_db(
                     ).all()
 
                     if len(db_regions) != len(exon_data):
-                        print("|| Nb of regions ||")
-                        print(tx)
-                        print(len(exon_data))
-                        print(exon_data)
-                        print(len(db_regions))
-                        print(db_regions)
+                        msg = (
+                            f"{panel_name} - {symbol} - {tx}: Nb of regions "
+                            f"for {refseq} is not what is expected"
+                        )
+                        LOGGER.error(msg)
                         return
 
                     exons = set()
@@ -213,9 +258,12 @@ def check_panelapp_dump_against_db(
                         region_id, db_chrom, db_start, db_end, ref = region
 
                         if (db_chrom, db_start, db_end) not in exons:
-                            print("|| Region ||")
-                            print(exons)
-                            print((db_chrom, db_start, db_end))
+                            msg = (
+                                f"{panel_name} - {symbol} - {tx}: "
+                                f"Region {db_chrom}:{db_start}-{db_end} is "
+                                f"not present in the exons of {refseq}"
+                            )
+                            LOGGER.error(msg)
                             return
 
         str_values = list(panelapp_dict[str(panelapp_id)]["strs"])
@@ -235,9 +283,10 @@ def check_panelapp_dump_against_db(
                     gene_tb.c.id == gene_id).one()[0]
 
                 if symbol != str_dict[name]["gene"]:
-                    print(f"|| Gene associated with {name} is not correct: ||")
-                    print(symbol)
-                    print(str_dict[name]["gene"])
+                    msg = (
+                        f"{panel_name} - {name}: '{symbol}' is not correct"
+                    )
+                    LOGGER.error(msg)
                     return
 
                 if (
@@ -245,9 +294,16 @@ def check_panelapp_dump_against_db(
                     str(nb_repeats) != str_dict[name]["nb_normal_repeats"] or
                     str(nb_patho_repeats) != str_dict[name]["nb_pathogenic_repeats"]
                 ):
-                    print("|| STR ||")
-                    print(str_dict[name])
-                    print(str_row)
+                    msg = (
+                        f"{panel_name} - {name}: Data for the str is not correct"
+                    )
+                    LOGGER.error(msg)
+                    msg = f"{repeated_seq} != {str_dict[name]['seq']}"
+                    LOGGER.debug(msg)
+                    msg = f"{nb_repeats} != {str_dict[name]['nb_normal_repeats']}"
+                    LOGGER.debug(msg)
+                    msg = f"{nb_patho_repeats} != {str_dict[name]['nb_pathogenic_repeats']}"
+                    LOGGER.debug(msg)
                     return
 
                 reg_str_query = session.query(
@@ -264,12 +320,19 @@ def check_panelapp_dump_against_db(
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            print("|| STR GRCh37 ||")
-                            print(region_dict[db_chrom]["GRCh37"])
+                            msg = (
+                                f"{panel_name} - {name}: "
+                                f"{db_chrom}:{db_start}-{db_end} not in GRCh37"
+                            )
+                            LOGGER.error(msg)
+
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            print("|| STR GRCh38 ||")
-                            print(region_dict[db_chrom]["GRCh38"])
+                            msg = (
+                                f"{panel_name} - {name}: "
+                                f"{db_chrom}:{db_start}-{db_end} not in GRCh38"
+                            )
+                            LOGGER.error(msg)
 
         cnv_values = list(panelapp_dict[str(panelapp_id)]["cnvs"])
 
@@ -282,9 +345,8 @@ def check_panelapp_dump_against_db(
                 (cnv_id, name, variant_type) = cnv_row
 
                 if (variant_type != cnv_dict[name]["type"]):
-                    print("|| CNV ||")
-                    print(cnv_dict[name])
-                    print(variant_type)
+                    msg = f"{panel_name} - {name}: Type of cnv is incorrect"
+                    LOGGER.error(msg)
                     return
 
                 reg_cnv_query = session.query(
@@ -301,12 +363,23 @@ def check_panelapp_dump_against_db(
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            print("|| CNV GRCh37 ||")
-                            print(region_dict[db_chrom]["GRCh37"])
+                            msg = (
+                                f"{panel_name} - {name}: "
+                                f"{db_chrom}:{db_start}-{db_end} not in GRCh37"
+                            )
+                            LOGGER.error(msg)
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            print("|| CNV GRCh38 ||")
-                            print(region_dict[db_chrom]["GRCh38"])
+                            msg = (
+                                f"{panel_name} - {name}: "
+                                f"{db_chrom}:{db_start}-{db_end} not in GRCh38"
+                            )
+                            LOGGER.error(msg)
+
+    msg = (
+        f"Checking against panelapp dump from {folder} correct on {get_date()}"
+    )
+    LOGGER.info(msg)
 
     return True
 
