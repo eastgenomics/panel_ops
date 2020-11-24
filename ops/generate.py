@@ -244,7 +244,7 @@ def get_django_json(model: str, pk: str, fields: dict):
 def create_django_json(
     ci_dict: dict, test2targets: dict, panelapp_dict: dict,
     superpanel_dict: dict, gene_dict: dict,
-    str_dict: dict, cnv_dict: dict, region_dict: dict
+    str_dict: dict, cnv_dict: dict, region_dict: dict, pk_dict
 ):
     """ Create dicts of data for django importing
 
@@ -285,25 +285,15 @@ def create_django_json(
 
     reference_json = []
 
-    # Loads of variables for primary keys
-    testpanel_pk = testgene_pk = 0
-    panelgene_pk = panelstr_pk = panelcnv_pk = 0
-    gene_pk = transcript_pk = exon_pk = 0
-    str_pk = regionstr_pk = 0
-    cnv_pk = regioncnv_pk = 0
-    region_pk = regioncnv_pk = 0
-    superpanel_pk = 0
-
     # Create the list of reference table
-    for ref_id, ref in enumerate(["GRCh37", "GRCh38"], 1):
+    for ref_id, ref in enumerate(["GRCh37", "GRCh38"], pk_dict["reference"]):
         reference_json.append(
             get_django_json("Reference", ref_id, {"name": ref})
         )
 
     # Create the list for panel, panel_gene, gene, transcript, exon, region for exons
-    for panel_id, panelapp_id in enumerate(panelapp_dict, 1):
+    for panel_id, panelapp_id in enumerate(panelapp_dict, pk_dict["panel"]):
         panel_dict = panelapp_dict[panelapp_id]
-        print(panel_dict["name"])
         panel_fields = {
                 "panelapp_id": panelapp_id, "name": panel_dict["name"],
                 "version": panel_dict["version"],
@@ -319,30 +309,33 @@ def create_django_json(
 
             if gene_dict[gene]["check"] is False:
                 # If gene not seen before, create gene json
-                gene_pk += 1
+                pk_dict["gene"] += 1
                 gene_fields = {
                     "symbol": gene,
                     "clinical_transcript": clinical_transcript,
                 }
-                sub_gene_dict = get_django_json("Gene", gene_pk, gene_fields)
+                sub_gene_dict = get_django_json(
+                    "Gene", pk_dict["gene"], gene_fields
+                )
 
                 if transcript_data:
                     # Go through the transcripts
                     for transcript in transcript_data:
-                        transcript_pk += 1
+                        pk_dict["transcript"] += 1
                         transcript_fields = {
                             "refseq": transcript.split(".")[0],
                             "version": transcript.split(".")[1],
-                            "gene": gene_pk
+                            "gene": pk_dict["gene"]
                         }
                         transcript_json.append(
                             get_django_json(
-                                "Transcript", transcript_pk, transcript_fields
+                                "Transcript", pk_dict["transcript"],
+                                transcript_fields
                             )
                         )
 
                         if transcript == clinical_transcript:
-                            sub_gene_dict["fields"]["clinical_transcript"] = transcript_pk
+                            sub_gene_dict["fields"]["clinical_transcript"] = pk_dict["transcript"]
 
                         # Go through the exons
                         for exon_nb in transcript_data[transcript]["exons"]:
@@ -360,34 +353,36 @@ def create_django_json(
                             if region_dict[exon_chrom][exon_ref_name][(
                                 exon_start, exon_end
                             )] is False:
-                                region_pk += 1
+                                pk_dict["region"] += 1
                                 region_fields = {
                                     "chrom": exon_chrom, "start": exon_start,
                                     "end": exon_end,
                                     "reference": exon_ref_id
                                 }
                                 region_to_add = get_django_json(
-                                    "Region", region_pk, region_fields
+                                    "Region", pk_dict["region"], region_fields
                                 )
                                 region_json.append(region_to_add)
                                 region_dict[exon_chrom][exon_ref_name][(
                                     exon_start, exon_end
                                 )] = region_to_add
-                                region_id = region_pk
+                                region_id = pk_dict["region"]
                             else:
                                 existing_region = region_dict[exon_chrom][exon_ref_name][(
                                     exon_start, exon_end
                                 )]
                                 region_id = existing_region["pk"]
 
-                            exon_pk += 1
+                            pk_dict["exon"] += 1
                             exon_fields = {
                                 "number": exon_nb,
-                                "transcript": transcript_pk,
+                                "transcript": pk_dict["transcript"],
                                 "region": region_id
                             }
                             exon_json.append(
-                                get_django_json("Exon", exon_pk, exon_fields)
+                                get_django_json(
+                                    "Exon", pk_dict["exon"], exon_fields
+                                )
                             )
 
                 gene_dict[gene]["check"] = sub_gene_dict
@@ -399,13 +394,15 @@ def create_django_json(
                 sub_gene_dict = gene_dict[gene]["check"]
 
             # Create link from Gene to Panel
-            panelgene_pk += 1
+            pk_dict["panelgene"] += 1
             panelgene_fields = {
                 "panel": panel_id,
                 "gene": gene_id
             }
             panelgene_json.append(
-                get_django_json("PanelGene", panelgene_pk, panelgene_fields)
+                get_django_json(
+                    "PanelGene", pk_dict["panelgene"], panelgene_fields
+                )
             )
 
     # Create the list for superpanels
@@ -434,12 +431,14 @@ def create_django_json(
 
         # for each subpanel of a superpanel, create a link
         for subpanel_pk in subpanel_pks:
-            superpanel_pk += 1
+            pk_dict["superpanel"] += 1
             superpanel_fields = {
                 "superpanel": superpanel_id, "panel": subpanel_pk
             }
             superpanel_json.append(
-                get_django_json("Superpanel", superpanel_pk, superpanel_fields)
+                get_django_json(
+                    "Superpanel", pk_dict["superpanel"], superpanel_fields
+                )
             )
 
     # Second pass because str have gene and if genes don't exist yet...
@@ -460,14 +459,14 @@ def create_django_json(
             ][0]
 
             if str_dict[str_name]["check"] is False:
-                str_pk += 1
+                pk_dict["str"] += 1
                 str_fields = {
                     "gene": str_gene_pk, "name": str_name,
                     "repeated_sequence": str_dict[str_name]["seq"],
                     "nb_repeats": str_dict[str_name]["nb_normal_repeats"],
                     "nb_pathogenic_repeats": str_dict[str_name]["nb_pathogenic_repeats"],
                 }
-                str_to_add = get_django_json("Str", str_pk, str_fields)
+                str_to_add = get_django_json("Str", pk_dict["str"], str_fields)
                 str_json.append(str_to_add)
 
                 # Handle region of str for grch37
@@ -482,30 +481,32 @@ def create_django_json(
                     if region_dict[str_chrom][str_ref_name][(
                         str_start, str_end
                     )] is False:
-                        region_pk += 1
+                        pk_dict["region"] += 1
                         region_fields = {
                             "chrom": str_chrom, "start": str_start,
                             "end": str_end, "reference": str_ref_id
                         }
                         region_to_add = get_django_json(
-                            "Region", region_pk, region_fields
+                            "Region", pk_dict["region"], region_fields
                         )
                         region_json.append(region_to_add)
                         region_dict[str_chrom][str_ref_name][(
                             str_start, str_end
                         )] = region_to_add
-                        region_id = region_pk
+                        region_id = pk_dict["region"]
                     else:
                         existing_region = region_dict[str_chrom][str_ref_name][(
                             str_start, str_end
                         )]
                         region_id = existing_region["pk"]
 
-                    regionstr_pk += 1
-                    regionstr_fields = {"region": region_id, "str": str_pk}
+                    pk_dict["regionstr"] += 1
+                    regionstr_fields = {
+                        "region": region_id, "str": pk_dict["str"]
+                    }
                     regionstr_json.append(
                         get_django_json(
-                            "RegionStr", regionstr_pk, regionstr_fields
+                            "RegionStr", pk_dict["regionstr"], regionstr_fields
                         )
                     )
 
@@ -521,30 +522,32 @@ def create_django_json(
                     if region_dict[str_chrom][str_ref_name][(
                         str_start, str_end
                     )] is False:
-                        region_pk += 1
+                        pk_dict["region"] += 1
                         region_fields = {
                             "chrom": str_chrom, "start": str_start,
                             "end": str_end, "reference": str_ref_id
                         }
                         region_to_add = get_django_json(
-                            "Region", region_pk, region_fields
+                            "Region", pk_dict["region"], region_fields
                         )
                         region_json.append(region_to_add)
                         region_dict[str_chrom][str_ref_name][(
                             str_start, str_end
                         )] = region_to_add
-                        region_id = region_pk
+                        region_id = pk_dict["region"]
                     else:
                         existing_region = region_dict[str_chrom][str_ref_name][(
                             str_start, str_end
                         )]
                         region_id = existing_region["pk"]
 
-                    regionstr_pk += 1
-                    regionstr_fields = {"region": region_id, "str": str_pk}
+                    pk_dict["regionstr"] += 1
+                    regionstr_fields = {
+                        "region": region_id, "str": pk_dict["str"]
+                    }
                     regionstr_json.append(
                         get_django_json(
-                            "RegionStr", regionstr_pk, regionstr_fields
+                            "RegionStr", pk_dict["regionstr"], regionstr_fields
                         )
                     )
 
@@ -553,20 +556,22 @@ def create_django_json(
             else:
                 str_id = str_dict[str_name]["check"]["pk"]
 
-            panelstr_pk += 1
+            pk_dict["panelstr"] += 1
             panelstr_fields = {"panel": panel_pk, "str": str_id}
             panelstr_json.append(
-                get_django_json("PanelStr", panelstr_pk, panelstr_fields)
+                get_django_json(
+                    "PanelStr", pk_dict["panelstr"], panelstr_fields
+                )
             )
 
         # Go through cnvs
         for cnv in panelapp_dict[panelapp_id]["cnvs"]:
             if cnv_dict[cnv]["check"] is False:
-                cnv_pk += 1
+                pk_dict["cnv"] += 1
                 cnv_fields = {
                     "name": cnv, "variant_type": cnv_dict[cnv]["type"],
                 }
-                cnv_to_add = get_django_json("Cnv", cnv_pk, cnv_fields)
+                cnv_to_add = get_django_json("Cnv", pk_dict["cnv"], cnv_fields)
                 cnv_json.append(cnv_to_add)
 
                 # Handle region of str for grch37
@@ -581,30 +586,32 @@ def create_django_json(
                     if region_dict[cnv_chrom][cnv_ref_name][(
                         cnv_start, cnv_end
                     )] is False:
-                        region_pk += 1
+                        pk_dict["region"] += 1
                         region_fields = {
                             "chrom": cnv_chrom, "start": cnv_start,
                             "end": cnv_end, "reference": cnv_ref_id
                         }
                         region_to_add = get_django_json(
-                            "Region", region_pk, region_fields
+                            "Region", pk_dict["region"], region_fields
                         )
                         region_json.append(region_to_add)
                         region_dict[cnv_chrom][cnv_ref_name][(
                             cnv_start, cnv_end
                         )] = region_to_add
-                        region_id = region_pk
+                        region_id = pk_dict["region"]
                     else:
                         existing_region = region_dict[cnv_chrom][cnv_ref_name][(
                             cnv_start, cnv_end
                         )]
                         region_id = existing_region["pk"]
 
-                    regioncnv_pk += 1
-                    regioncnv_fields = {"region": region_id, "cnv": cnv_pk}
+                    pk_dict["regioncnv"] += 1
+                    regioncnv_fields = {
+                        "region": region_id, "cnv": pk_dict["cnv"]
+                    }
                     regioncnv_json.append(
                         get_django_json(
-                            "RegionCnv", regioncnv_pk, regioncnv_fields
+                            "RegionCnv", pk_dict["regioncnv"], regioncnv_fields
                         )
                     )
 
@@ -620,30 +627,32 @@ def create_django_json(
                     if region_dict[cnv_chrom][cnv_ref_name][(
                         cnv_start, cnv_end
                     )] is False:
-                        region_pk += 1
+                        pk_dict["region"] += 1
                         region_fields = {
                             "chrom": cnv_chrom, "start": cnv_start,
                             "end": cnv_end, "reference": cnv_ref_id
                         }
                         region_to_add = get_django_json(
-                            "Region", region_pk, region_fields
+                            "Region", pk_dict["region"], region_fields
                         )
                         region_json.append(region_to_add)
                         region_dict[cnv_chrom][cnv_ref_name][(
                             cnv_start, cnv_end
                         )] = region_to_add
-                        region_id = region_pk
+                        region_id = pk_dict["region"]
                     else:
                         existing_region = region_dict[cnv_chrom][cnv_ref_name][(
                             cnv_start, cnv_end
                         )]
                         region_id = existing_region["pk"]
 
-                    regioncnv_pk += 1
-                    regioncnv_fields = {"region": region_id, "cnv": cnv_pk}
+                    pk_dict["regioncnv"] += 1
+                    regioncnv_fields = {
+                        "region": region_id, "cnv": pk_dict["cnv"]
+                    }
                     regioncnv_json.append(
                         get_django_json(
-                            "RegionCnv", regioncnv_pk, regioncnv_fields
+                            "RegionCnv", pk_dict["regioncnv"], regioncnv_fields
                         )
                     )
 
@@ -652,14 +661,16 @@ def create_django_json(
             else:
                 cnv_id = cnv_dict[cnv]["check"]["pk"]
 
-            panelcnv_pk += 1
+            pk_dict["panelcnv"] += 1
             panelcnv_fields = {"panel": panel_pk, "cnv": cnv_id}
             panelcnv_json.append(
-                get_django_json("PanelCnv", panelcnv_pk, panelcnv_fields)
+                get_django_json(
+                    "PanelCnv", pk_dict["panelcnv"], panelcnv_fields
+                )
             )
 
     # Go through tests to assign panels and genes
-    for test_pk, test in enumerate(test2targets, 1):
+    for test_pk, test in enumerate(test2targets, pk_dict["test"]):
         clinind_id, test_id = test.split(".")
         name = ci_dict[clinind_id]
         method = test2targets[test]["method"]
@@ -684,28 +695,30 @@ def create_django_json(
 
             if panel_pk:
                 panel_pk = panel_pk[0]
-                testpanel_pk += 1
+                pk_dict["testpanel"] += 1
                 testpanel_fields = {"test": test_pk, "panel": panel_pk}
                 testpanel_json.append(
                     get_django_json(
-                        "TestPanel", testpanel_pk, testpanel_fields
+                        "TestPanel", pk_dict["testpanel"], testpanel_fields
                     )
                 )
 
         # Create test_genes json
         for gene in test2targets[test]["genes"]:
-            gene_pk = [
+            pk_dict["gene"] = [
                 gene_django["pk"]
                 for gene_django in gene_json
                 if gene_django["fields"]["symbol"] == gene
             ]
 
-            if gene_pk:
-                gene_pk = gene_pk[0]
-                testgene_pk += 1
-                testgene_fields = {"test": test_pk, "gene": gene_pk}
+            if pk_dict["gene"]:
+                pk_dict["gene"] = pk_dict["gene"][0]
+                pk_dict["testgene"] += 1
+                testgene_fields = {"test": test_pk, "gene": pk_dict["gene"]}
                 testgene_json.append(
-                    get_django_json("TestGene", testgene_pk, testgene_fields)
+                    get_django_json(
+                        "TestGene", pk_dict["testgene"], testgene_fields
+                    )
                 )
 
     return {
