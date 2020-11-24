@@ -88,6 +88,15 @@ def main(**param):
 
         # Generate django fixture using given panelapp dump
         if param["json"]:
+            pk_dict = {
+                "test": 1, "panel": 1, "reference": 1,
+                "testpanel": 0, "testgene": 0,
+                "panelgene": 0, "panelstr": 0, "panelcnv": 0,
+                "gene": 0, "transcript": 0, "exon": 0,
+                "str": 0, "regionstr": 0,
+                "cnv": 0, "regioncnv": 0,
+                "region": 0, "superpanel": 0
+            }
             (
                 panelapp_dict, superpanel_dict, gene_dict,
                 str_dict, cnv_dict, region_dict
@@ -96,7 +105,7 @@ def main(**param):
             )
             json_lists = ops.generate.create_django_json(
                 ci_dict, test2targets, panelapp_dict, superpanel_dict,
-                gene_dict, str_dict, cnv_dict, region_dict
+                gene_dict, str_dict, cnv_dict, region_dict, pk_dict
             )
             ops.generate.write_django_jsons(json_lists)
 
