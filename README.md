@@ -14,7 +14,11 @@ Checking database data, checking tests against Test directory, checking gene tra
 
 Python > 3.6
 
-Database called panel_database
+Database called panel_database:
+
+<p align="center">
+    <img height="100%" width="100%" src="panel_database_schema.png">
+</p>
 
 From https://github.com/PyMySQL/mysqlclient-python :
 >Linux  
