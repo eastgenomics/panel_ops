@@ -5,7 +5,6 @@ import os
 
 import dxpy
 import regex
-import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.schema import MetaData
 import vcf
