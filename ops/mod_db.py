@@ -11,6 +11,7 @@ django.setup()
 
 from django.core import management
 from django.core.management.commands import loaddata
+from django.forms.models import model_to_dict
 from panel_database.models import (
     Test, Panel, Cnv, Str, Gene, Transcript, Exon, Reference, Region,
     TestPanel, TestGene, PanelStr, PanelGene, PanelCnv, RegionStr, RegionCnv
@@ -43,9 +44,9 @@ def import_django_fixture(path_to_json):
 
 
 def check_attributes_for_obj(obj, **attributes):
-    obj = obj.filter(**attributes)
+    model_dict = model_to_dict(obj, fields=attributes.keys())
 
-    if obj:
+    if model_dict != attributes:
         return True
     else:
         return False
@@ -131,6 +132,10 @@ def update_django_tables(data_dicts):
         str_dict, cnv_dict, region_dict
     ) = data_dicts
 
+    pk_dict = {}
+
+    LOGGER.info("Updating panels")
+
     for superpanel in superpanel_dict:
         pass
 
@@ -149,7 +154,10 @@ def update_django_tables(data_dicts):
             latest_panel_pk = Panel.objects.latest("id").values_list(
                 "id", flat=True
             )
+            pk_dict["panel"] = latest_panel_pk
         else:
+            # check if the attributes from the panelapp dump are
+            # the same as the ones stored in the database
             panel_attributes = {
                 "version": panel_data["version"], "name": panel_data["name"],
                 "signedoff": panel_data["signedoff"]
@@ -166,7 +174,24 @@ def update_django_tables(data_dicts):
                     panel_obj, panel_id, panel_data
                 )
                 LOGGER.info(" | ".join(msg))
+                # panel_obj.save()
 
+            # check if the panel is linked to the correct gene, str, cnv
+            panelgene_queryset = PanelGene.objects.select_related(
+                "gene"
+            ).filter(panel_id=panel_obj.pk)
+
+            gene_symbols = [
+                queryset.gene.symbol for queryset in panelgene_queryset
+            ]
+
+            diff = set(gene_symbols).symmetric_difference(panel_genes)
+            if diff:
+                LOGGER.info(f"{panel_data['name']}: Genes linked are not identical")
+                LOGGER.debug(f"{gene_symbols}")
+                LOGGER.debug(f"{panel_genes}")
+
+            return
             for gene in panel_genes:
                 gene_data = gene_dict[gene]
 
@@ -200,6 +225,12 @@ def update_django_tables(data_dicts):
                             "id", flat=True
                         )
 
+                    else:
+                        # Check the link between gene and transcript
+                        gene_pk = gene_obj
+                        tx_pk = tx_obj
+
+
             for str_name in panel_strs:
                 str_data = str_dict[str_name]
 
@@ -229,6 +260,7 @@ def update_django_tables(data_dicts):
                             str_obj, str_name, str_data
                         )
                         LOGGER.info(" | ".join(msg))
+                        # str_obj.save()
 
             for cnv_name in panel_cnvs:
                 cnv_data = cnv_dict[cnv_name]
@@ -257,3 +289,4 @@ def update_django_tables(data_dicts):
                             cnv_obj, cnv_name, cnv_data
                         )
                         LOGGER.info(" | ".join(msg))
+                        # cnv_obj.save()
