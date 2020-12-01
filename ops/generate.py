@@ -132,7 +132,7 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     LOGGER.info(f"Created gms panels: {out_folder}")
 
 
-def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
+def generate_g2t(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
     """ Generate g2t file and genes that have no transcripts file
 
     Args:
@@ -748,10 +748,12 @@ def generate_gemini_names(session, meta, test2targets: dict):
     db_tests = [row for row in session.query(test_table.c.gemini_name)]
 
     if len(db_tests) == len(test2targets):
-        print("Nb of tests in db as expected")
+        LOGGER.info("Nb of tests in db as expected")
     else:
-        print(len(test2targets))
-        print(db_tests)
+        LOGGER.error(
+            f"Nb of tests in the national test directory: {len(test2targets)}"
+        )
+        LOGGER.error(f"Tests retrieved from the database: {db_tests}")
         return
 
     if not os.path.exists("sql_dump"):
