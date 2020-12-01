@@ -5,7 +5,7 @@ import sys
 
 import ops
 
-sys.path.append("/home/egg-user/panels/panel_config")
+sys.path.append(ops.config.path_to_panel_config)
 
 import config_panel_db
 
@@ -45,7 +45,7 @@ def main(**param):
     elif param["command"] == "generate":
         # Generate g2t + genes without transcript files
         if param["g2t"]:
-            ops.generate.get_all_transcripts(
+            ops.generate.generate_g2t(
                 param["g2t"], hgmd_dict, nirvana_dict
             )
 
@@ -68,18 +68,21 @@ def main(**param):
                 gms_panels, "GMS"
             )
 
+        # Generate a bioinformatic manifest type file for reports
         if param["manifest"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             sample2panels = ops.generate.generate_sample2panels(
                 session, meta, param["manifest"]
             )
 
+        # Generate file containing all the GMS panels names stored in the db
         if param["panel_names_gms"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             panel_file = ops.generate.generate_panel_names(
                 session, meta, gms=True
             )
 
+        # Generate file containing all the panels names stored in the db
         if param["panel_names_all"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             panel_file = ops.generate.generate_panel_names(
@@ -88,7 +91,10 @@ def main(**param):
 
         # Generate django fixture using given panelapp dump
         if param["json"]:
+            # Primary keys for importing the data in the database
             pk_dict = {
+                # they start at 1 because I loop over those elements
+                # makes it easier to keep track off
                 "test": 1, "panel": 1, "reference": 1,
                 "testpanel": 0, "testgene": 0,
                 "panelgene": 0, "panelstr": 0, "panelcnv": 0,
