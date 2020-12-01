@@ -6,7 +6,8 @@ LOGGER = setup_logging("check")
 
 
 def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
-    """Returns the transcripts and exons for given gene according to HGMD and nirvana
+    """Returns the transcripts and exons for given gene according to HGMD and
+    nirvana
 
     Args:
         gene (str): Gene symbol
@@ -35,11 +36,12 @@ def check_gene(gene: str, hgmd_dict: dict, nirvana_dict: dict):
 
 
 def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
-    """ Check that the data in the panelapp dump is the same as what's in the db
+    """ Check that the data in the panelapp dump is the same as what's in the
+    db
 
     Args:
         folder (str): Folder in which panels are stored
-        session (SQLAlchemy session): Session object
+        session (SQLAlchemysession): Session object 
         meta (SQLAlchemy MetaData): Metadata object
         data_dicts (tuple): Tuple of dicts
     """
@@ -93,7 +95,8 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
     # Check subpanels associated to superpanels
     for superpanel_row in db_superpanels:
         (
-            superpanel_id, panelapp_id, panel_name, version, signedoff, superpanel
+            superpanel_id, panelapp_id, panel_name,
+            version, signedoff, superpanel
         ) = superpanel_row
 
         superpanel_query = session.query(superpanel_tb.c.panel_id).filter(
@@ -141,7 +144,9 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
         return
 
     for panel_row in db_panels:
-        panel_id, panelapp_id, panel_name, version, signedoff, superpanel = panel_row
+        (
+            panel_id, panelapp_id, panel_name, version, signedoff, superpanel
+        ) = panel_row
 
         # Get all genes for that panel
         gene_values = list(panelapp_dict[str(panelapp_id)]["genes"])
@@ -268,6 +273,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
         str_values = list(panelapp_dict[str(panelapp_id)]["strs"])
 
+        # If the panel has strs
         if str_values:
             db_strs = session.query(str_tb).filter(
                 str_tb.c.id.in_(str_values)
@@ -282,6 +288,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                 symbol = session.query(gene_tb.c.symbol).filter(
                     gene_tb.c.id == gene_id).one()[0]
 
+                # Gene associated with the str is not correct
                 if symbol != str_dict[name]["gene"]:
                     msg = (
                         f"{panel_name} - {name}: '{symbol}' is not correct"
@@ -289,6 +296,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                     LOGGER.error(msg)
                     return
 
+                # data stored for the str is not correct
                 if (
                     repeated_seq != str_dict[name]["seq"] or
                     str(nb_repeats) != str_dict[name]["nb_normal_repeats"] or
@@ -336,6 +344,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
         cnv_values = list(panelapp_dict[str(panelapp_id)]["cnvs"])
 
+        # panel has cnvs
         if cnv_values:
             db_cnvs = session.query(cnv_tb).filter(
                 cnv_tb.c.name.in_(cnv_values)
@@ -344,6 +353,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
             for cnv_row in db_cnvs:
                 (cnv_id, name, variant_type) = cnv_row
 
+                # check the type of the cnv
                 if (variant_type != cnv_dict[name]["type"]):
                     msg = f"{panel_name} - {name}: Type of cnv is incorrect"
                     LOGGER.error(msg)
@@ -393,6 +403,8 @@ def check_test_against_db(session, meta, test2target: dict):
         test2target (dict): Dict of test2target
     """
 
+    LOGGER.info("Checking tests")
+
     test_tb = meta.tables["test"]
     test_panel_tb = meta.tables["test_panel"]
     panel_tb = meta.tables["panel"]
@@ -404,14 +416,18 @@ def check_test_against_db(session, meta, test2target: dict):
         test_tb.c.test_id.in_(test_ids)
     ).all()
 
-    # Check if the number of imported tests is the same as the number of tests in the xls
+    # Check if the number of imported tests is the same as the number of tests
+    # in the xls
     if len(test2target) != len(db_tests):
-        print("Tests are bad")
+        msg = (
+            "Nb of tests in the xls is not the same has in the database: "
+            f"xls {len(test2target)} vs db {len(db_tests)}"
+        )
+        LOGGER.error(msg)
         return
 
     for test in db_tests:
         db_test_id, test_id, clin_ind, method, date, gem_name = test
-        print(test_id)
 
         panel_targets = test2target[test_id]["panels"]
 
@@ -422,7 +438,8 @@ def check_test_against_db(session, meta, test2target: dict):
                 test_panel_tb.c.test_id == db_test_id
             ).all()
 
-            # From the associated panels, check if the panelapp id imported is the same as the one in the xls
+            # From the associated panels, check if the panelapp id imported is
+            # the same as the one in the xls
             for panel_target in db_panel_targets:
                 test_panel_id, panel_id, db_test_id = panel_target
                 panelapp_id = session.query(panel_tb.c.panelapp_id).filter(
@@ -430,10 +447,10 @@ def check_test_against_db(session, meta, test2target: dict):
                 ).one()[0]
 
                 if str(panelapp_id) not in test2target[test_id]["panels"]:
-                    print("Panel is bad")
-                    print(panel_id)
-                    print(panelapp_id)
-                    print(test2target[test_id]["panels"])
+                    LOGGER.info(
+                        f"Panel {panelapp_id} is missing from {test_id}"
+                    )
+                    LOGGER.debug(test2target[test_id]["panels"])
                     return
 
         gene_targets = test2target[test_id]["genes"]
@@ -445,7 +462,8 @@ def check_test_against_db(session, meta, test2target: dict):
                 test_gene_tb.c.test_id == db_test_id
             ).all()
 
-            # From the associated genes, check if the gene imported is the same as the one(s) in the xls
+            # From the associated genes, check if the gene imported is the same
+            # as the one(s) in the xls
             for gene_target in db_gene_targets:
                 test_panel_id, gene_id, db_test_id = gene_target
                 symbol = session.query(gene_tb.c.symbol).filter(
@@ -453,7 +471,10 @@ def check_test_against_db(session, meta, test2target: dict):
                 ).one()[0]
 
                 if symbol not in test2target[test_id]["genes"]:
-                    print("Gene is bad")
+                    LOGGER.info(
+                        f"Gene {symbol} is missing from {test_id}"
+                    )
+                    LOGGER.debug(test2target[test_id]["panels"])
                     return
 
     return True
