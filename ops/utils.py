@@ -2,9 +2,11 @@ from collections import defaultdict, OrderedDict
 import datetime
 import gzip
 import os
+import sys
 
 import dxpy
 import regex
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.schema import MetaData
 import vcf
@@ -12,7 +14,12 @@ import xlrd
 
 from panelapp import queries
 
+from .config import hgmd_dxid, hgmd_project
 from .hardcoded_tests import tests as hd_tests
+from .logger import setup_logging
+
+
+LOGGER = setup_logging("utils")
 
 
 def assign_transcript(gene: str, hgmd_dict: dict, nirvana_dict: dict):
@@ -70,14 +77,23 @@ def connect_to_db(user, passwd, host):
         sqlalchemy cursor: Panel_database cursor
     """
 
-    db = sqlalchemy.create_engine(
-        f"mysql://{user}:{passwd}@{host}/panel_database"
-    )
-    meta = MetaData()
-    meta.reflect(bind=db)
-    Session = sessionmaker(bind=db)
-    session = Session()
-    return session, meta
+    try:
+        db = create_engine(
+            f"mysql://{user}:{passwd}@{host}/panel_database"
+        )
+    except Exception as e:
+        LOGGER.error(
+            "Couldn't connect to the panel_database, "
+            "check the utils log for the error"
+        )
+        LOGGER.debug(e)
+        sys.exit(-1)
+    else:
+        meta = MetaData()
+        meta.reflect(bind=db)
+        Session = sessionmaker(bind=db)
+        session = Session()
+        return session, meta
 
 
 def get_all_panels():
@@ -115,17 +131,22 @@ def parse_HGMD():
 
     data = {}
 
-    f = vcf.Reader(dxpy.DXFile(
-        dxid="file-Fv1X0jQ40qBjj4GPKj196kjJ",
-        project="project-Fv1Vzkj40qBfq0v38p7q50v8"
-    ))
+    try:
+        f = vcf.Reader(dxpy.DXFile(dxid=hgmd_dxid, project=hgmd_project))
+    except Exception as e:
+        LOGGER.info(
+            "Couldn't access the hgmd pro vcf, "
+            "check the utils log for the error"
+        )
+        LOGGER.debug(e)
+        sys.exit(-1)
+    else:
+        for line in f:
+            gene = line.INFO["GENE"]
+            transcript = line.INFO["DNA"].split("%")[0]
+            data[gene.upper()] = transcript
 
-    for line in f:
-        gene = line.INFO["GENE"]
-        transcript = line.INFO["DNA"].split("%")[0]
-        data[gene.upper()] = transcript
-
-    return data
+        return data
 
 
 def get_nirvana_data_dict(nirvana_refseq: str):
@@ -151,13 +172,13 @@ def get_nirvana_data_dict(nirvana_refseq: str):
             info_fields = info_field.split("; ")
             info_dict = {}
 
+            # skip lines where the entity type is gene, UTR, CDS
             if record_type in ["gene", "UTR", "CDS"]:
                 continue
 
             for field in info_fields:
                 key, value = field.split(" ")
-                value = value.strip("\"")
-                value = value.strip("\'")
+                value = value.strip("\"").strip("\'")
                 info_dict[key] = value
 
             gff_gene_name = info_dict["gene_name"]
@@ -208,7 +229,8 @@ def create_panelapp_dict(
     superpanel_dict = defaultdict(
         lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(None)))
     )
-    # The following dicts will contain a key called "check" for knowing whether the entity has been seen before
+    # The following dicts will contain a key called "check" for knowing whether
+    # the entity has been seen before
     gene_dict = defaultdict(lambda: defaultdict(None))
     str_dict = defaultdict(lambda: defaultdict(None))
     cnv_dict = defaultdict(lambda: defaultdict(None))
@@ -220,6 +242,7 @@ def create_panelapp_dict(
 
             with open(panel_path) as f:
                 if file.endswith("_superpanel.tsv"):
+                    # dealing with a superpanel
                     for line in f:
                         (
                             panel_id, panel_name, panel_version,
@@ -234,6 +257,7 @@ def create_panelapp_dict(
                         su_panel_dict["version"] = panel_version
                         su_panel_dict["signedoff"] = panel_signedoff
                 else:
+                    # dealing with a normal panel
                     for line in f:
                         line = line.strip().split("\t")
                         (
@@ -287,13 +311,17 @@ def create_panelapp_dict(
                                 chrom, grch37_coor
                             )
                             str_dict[name]["grch37"] = extracted_grch37
-                            region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
+
+                            if region_check_37 is not None:
+                                region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
 
                             extracted_grch38, region_check_38 = parse_coor(
                                 chrom, grch38_coor
                             )
                             str_dict[name]["grch38"] = extracted_grch38
-                            region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
+
+                            if region_check_38 is not None:
+                                region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
 
                         elif entity_type == "cnv":
                             (
@@ -310,13 +338,17 @@ def create_panelapp_dict(
                                 chrom, grch37_coor
                             )
                             cnv_dict[name]["grch37"] = extracted_grch37
-                            region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
+
+                            if region_check_37 is not None:
+                                region_dict[chrom]["GRCh37"][(extracted_grch37[1:])] = region_check_37
 
                             extracted_grch38, region_check_38 = parse_coor(
                                 chrom, grch38_coor
                             )
                             cnv_dict[name]["grch38"] = extracted_grch38
-                            region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
+
+                            if region_check_38 is not None:
+                                region_dict[chrom]["GRCh38"][(extracted_grch38[1:])] = region_check_38
 
     return (
         panelapp_dict, superpanel_dict, gene_dict,
@@ -334,6 +366,7 @@ def parse_tests_xls(file: str):
         tuple: Dict of clin_ind_id2clin_ind and dict of test_id2targets
     """
 
+    # clinical indication id to clinical indication
     ci_id2ci = {}
     test_id2targets = defaultdict(lambda: defaultdict(str))
 
@@ -403,7 +436,7 @@ def clean_targets(ci_dict: dict, test2targets: dict):
                 # check if the target has parentheses with numbers in there
                 match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
 
-                # it's a panel
+                # it's a panel, parentheses detected, really reliable
                 if match:
                     target_to_add = match.group("panel_id").strip("()")
                     clean_test2targets[test]["panels"].append(target_to_add)
@@ -430,6 +463,7 @@ def parse_coor(chrom: str, coordinates: tuple):
     Returns:
         tuple: Tuple of tuple for coordinates and bool for the region check
     """
+
     if coordinates != "None":
         start_grch, end_grch = coordinates.strip("[]").split(",")
         start_grch = start_grch.strip()
