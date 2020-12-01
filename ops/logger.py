@@ -1,15 +1,24 @@
 import logging.config
 
+from .config import path_to_logs
+
 
 def setup_logging(type_logger):
-    path_to_logs = "/home/egg-user/panels/panel_logs"
+    """ Return appropriate logger given name of logger
+
+    Args:
+        type_logger (str): Name of logger to be retrived
+
+    Returns:
+        logger: Logger object
+    """
 
     logging.config.dictConfig({
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
             "normal": {
-                "format": "%(asctime)s %(name)-8s %(levelname)s - %(message)s"
+                "format": "%(asctime)s %(name)s %(levelname)s - %(message)s"
             },
             "brief": {
                 "format": "%(message)s"
@@ -49,6 +58,15 @@ def setup_logging(type_logger):
                 "maxBytes": 10000000,
                 "backupCount": 5,
             },
+            "utils_file": {
+                "level": "DEBUG",
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "normal",
+                "filename": f"{path_to_logs}/panel_utils.log",
+                "mode": "a",
+                "maxBytes": 10000000,
+                "backupCount": 5,
+            },
         },
         "loggers": {
             "generation": {
@@ -62,6 +80,10 @@ def setup_logging(type_logger):
             "mod_db": {
                 "level": "DEBUG",
                 "handlers": ["console", "mod_db_file"]
+            },
+            "utils": {
+                "level": "DEBUG",
+                "handlers": ["console", "utils_file"]
             }
         }
     })
