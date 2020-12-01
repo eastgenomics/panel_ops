@@ -9,7 +9,7 @@ def setup_logging(type_logger):
         "disable_existing_loggers": False,
         "formatters": {
             "normal": {
-                "format": "%(asctime)s %(name)-8s %(levelname) - %(message)s"
+                "format": "%(asctime)s %(name)-8s %(levelname)s - %(message)s"
             },
             "brief": {
                 "format": "%(message)s"
