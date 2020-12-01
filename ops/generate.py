@@ -2,7 +2,6 @@ from collections import defaultdict
 import json
 import os
 
-from .hardcoded_tests import tests as hd_tests
 from .logger import setup_logging
 from .utils import (
     get_date, assign_transcript, parse_gemini_dump
@@ -133,7 +132,7 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     LOGGER.info(f"Created gms panels: {out_folder}")
 
 
-def get_all_transcripts(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
+def generate_g2t(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
     """ Generate g2t file and genes that have no transcripts file
 
     Args:
