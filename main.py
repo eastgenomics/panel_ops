@@ -129,7 +129,7 @@ def main(**param):
         session, meta = ops.utils.connect_to_db(user, passwd, host)
 
         if param["gemini_name"]:
-            ops.queries.get_gemini_name(session, meta, param["test"])
+            ops.queries.get_gemini_name(session, meta, param["gemini_name"])
         elif param["gene_test"]:
             ops.queries.get_genes_from_gemini_name(
                 session, meta, param["gene_test"]
