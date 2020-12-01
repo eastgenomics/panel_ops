@@ -1,5 +1,5 @@
 def get_gemini_name(session, meta, part_of_gemini_name: str):
-    """ Return the gemini name using part of this name
+    """ Return the gemini name using given string
 
     Args:
         session (SQLAlchemy session): Session object
@@ -14,11 +14,18 @@ def get_gemini_name(session, meta, part_of_gemini_name: str):
 
     test_name = session.query(test_tb.c.gemini_name).filter(
         test_tb.c.gemini_name.like(f"%{part_of_gemini_name}%")
-    ).one()[0]
+    ).all()
 
-    print(test_name)
-
-    return test_name
+    if len(test_name) == 1:
+        print(test_name[0][0])
+        return test_name
+    else:
+        print(
+            f"{part_of_gemini_name} is too ambiguous, {len(test_name)} "
+            "results returned"
+        )
+        print(test_name)
+        return
 
 
 def get_genes_from_gemini_name(session, meta, gemini_name: str):
@@ -41,30 +48,39 @@ def get_genes_from_gemini_name(session, meta, gemini_name: str):
 
     test_id = session.query(test_tb.c.id).filter(
         test_tb.c.gemini_name.like(f"%{gemini_name}%")
-    ).one()[0]
-
-    test2genes = session.query(test_gene_tb.c.gene_id).filter(
-        test_gene_tb.c.test_id == test_id
     ).all()
 
-    test2panels = session.query(test_panel_tb.c.panel_id).filter(
-        test_panel_tb.c.test_id == test_id
-    ).all()
+    if len(test_id) != 1:
+        print(
+            f"{gemini_name} is too ambiguous, {len(test_id)} "
+            "results returned"
+        )
+        print(test_id)
+        return
+    else:
+        test2genes = session.query(test_gene_tb.c.gene_id).filter(
+            test_gene_tb.c.test_id == test_id
+        ).all()
 
-    panel2genes = session.query(panel_gene_tb.c.gene_id).filter(
-        panel_gene_tb.c.panel_id.in_(test2panels)
-    ).all()
+        test2panels = session.query(test_panel_tb.c.panel_id).filter(
+            test_panel_tb.c.test_id == test_id
+        ).all()
 
-    genes_from_tests = session.query(gene_tb.c.symbol).filter(
-        gene_tb.c.id.in_(test2genes)
-    ).all()
+        panel2genes = session.query(panel_gene_tb.c.gene_id).filter(
+            panel_gene_tb.c.panel_id.in_(test2panels)
+        ).all()
 
-    genes_from_panels = session.query(gene_tb.c.symbol).filter(
-        gene_tb.c.id.in_(panel2genes)
-    ).all()
+        genes_from_tests = session.query(gene_tb.c.symbol).filter(
+            gene_tb.c.id.in_(test2genes)
+        ).all()
 
-    genes = genes_from_tests + genes_from_panels
+        genes_from_panels = session.query(gene_tb.c.symbol).filter(
+            gene_tb.c.id.in_(panel2genes)
+        ).all()
 
-    print(",".join([f"_{gene[0]}" for gene in genes]))
+        # 2 lists of tuples with one element merged into one
+        genes = genes_from_tests + genes_from_panels
 
-    return ",".join([f"_{gene[0]}" for gene in genes])
+        print(",".join([f"_{gene[0]}" for gene in genes]))
+
+        return ",".join([f"_{gene[0]}" for gene in genes])
