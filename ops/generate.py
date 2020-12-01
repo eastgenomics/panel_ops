@@ -749,10 +749,12 @@ def generate_gemini_names(session, meta, test2targets: dict):
     db_tests = [row for row in session.query(test_table.c.gemini_name)]
 
     if len(db_tests) == len(test2targets):
-        print("Nb of tests in db as expected")
+        LOGGER.info("Nb of tests in db as expected")
     else:
-        print(len(test2targets))
-        print(db_tests)
+        LOGGER.error(
+            f"Nb of tests in the national test directory: {len(test2targets)}"
+        )
+        LOGGER.error(f"Tests retrieved from the database: {db_tests}")
         return
 
     if not os.path.exists("sql_dump"):
