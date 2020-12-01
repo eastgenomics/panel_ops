@@ -4,7 +4,7 @@ from .check import (
 from .mod_db import import_django_fixture, update_django_tables
 from .generate import (
     generate_panelapp_dump, generate_genepanels, generate_gms_panels,
-    get_all_transcripts, write_django_jsons, get_django_json,
+    generate_g2t, write_django_jsons, get_django_json,
     create_django_json, generate_gemini_names, generate_sample2panels,
     generate_panel_names
 )
