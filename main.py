@@ -1,5 +1,30 @@
 #!/usr/bin/python3
 
+""" Panel operations
+
+4 subparsers:
+- check:
+    - gene: get transcripts of given gene using the nirvana GFF
+    - panel: check the panelapp dump folder given against the database
+    - test: check the National test directory file against the database
+- generate:
+    - panelapp_gms: generate panelapp dump using only GMS panels
+    - panelapp_all: generate panelapp dump using only all panels
+    - g2t: generate genes2transcripts file + no transcripts file
+    - gene_files: generate files for panels with gene symbols only
+    - json: generate django fixture using panelapp dump folder
+    - genepanels: generate genepanels file
+    - gemini: generate dump of gemini names
+    - manifest: generate manifest type file for reports using Gemini db dump
+    - panel_names_gms: generate file with GMS panel names
+    - panel_names_all: generate file with all panel names
+- query:
+    - gemini_name: Query to get the full gemini name given a substring of that name
+    - gene_test: Query to get all the genes for a gemini name
+- mod_db:
+    - initial_import: Import given django fixture in the database
+"""
+
 import argparse
 import sys
 
@@ -120,7 +145,7 @@ def main(**param):
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             ops.generate.generate_genepanels(session, meta)
 
-        # Generate gemini name file from database
+        # Generate file containing the name of the tests in Gemini
         if param["gemini"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
             ops.generate.generate_gemini_names(session, meta, test2targets)
@@ -128,14 +153,18 @@ def main(**param):
     elif param["command"] == "query":
         session, meta = ops.utils.connect_to_db(user, passwd, host)
 
+        # Return the full gemini name given a substring of that name
         if param["gemini_name"]:
             ops.queries.get_gemini_name(session, meta, param["gemini_name"])
+
+        # Return the genes given a substring of a gemini name
         elif param["gene_test"]:
             ops.queries.get_genes_from_gemini_name(
                 session, meta, param["gene_test"]
             )
 
     elif param["command"] == "mod_db":
+        # Import given django fixture to the database
         if param["initial_import"]:
             ops.mod_db.import_django_fixture(
                 param["initial_import"]
