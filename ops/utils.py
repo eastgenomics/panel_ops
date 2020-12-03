@@ -142,9 +142,10 @@ def parse_HGMD():
         sys.exit(-1)
     else:
         for line in f:
-            gene = line.INFO["GENE"]
-            transcript = line.INFO["DNA"].split("%")[0]
-            data[gene.upper()] = transcript
+            if "GENE" in line.INFO and "DNA" in line.INFO:
+                gene = line.INFO["GENE"]
+                transcript = line.INFO["DNA"].split("%")[0]
+                data[gene.upper()] = transcript
 
         return data
 
