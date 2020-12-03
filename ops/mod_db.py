@@ -26,14 +26,17 @@ def import_django_fixture(path_to_json):
     """ Import data to django database using a django fixture (json with
     specific format)
 
-    Args: path_to_json (str): Path to django fixture
+    Args:
+        path_to_json (str): Path to django fixture
 
-    Returns: bool: True if import works
+    Returns:
+        bool: True if import works
     """
 
     LOGGER.info(f"Importing data using json: '{path_to_json}'")
 
     try:
+        # Call the loaddata cmd --> python manage.py loaddata path_to_json
         management.call_command(loaddata.Command(), path_to_json)
     except Exception as e:
         LOGGER.error("Importing gone wrong")
