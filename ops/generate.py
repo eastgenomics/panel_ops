@@ -78,18 +78,65 @@ def generate_genepanels(session, meta):
 
     panel_table = meta.tables["panel"]
     gene_table = meta.tables["gene"]
+    superpanel_table = meta.tables["superpanel"]
     panel_gene_table = meta.tables["panel_gene"]
 
-    for panel_id, name in session.query(panel_table.c.id, panel_table.c.name):
-        panels[panel_id] = name
+    # query database to get all panels
+    for panel_row in session.query(panel_table):
+        (
+            panel_id, panelapp_id, name, version, signedoff, is_superpanel
+        ) = panel_row
 
+        panels[panel_id] = (name, is_superpanel, version)
+
+    # query database to get all genes
     for gene_id, symbol in session.query(gene_table.c.id, gene_table.c.symbol):
         genes[gene_id] = symbol
 
+    # query database to get all panel2genes links
     for gene_id, panel_id in session.query(
         panel_gene_table.c.gene_id, panel_gene_table.c.panel_id
     ):
         gene_panels.setdefault(panel_id, []).append(gene_id)
+
+    # we want a pretty file so store the data in a nice way
+    output_data = set()
+
+    for panel_id, panel_data in panels.items():
+        panel_name, is_superpanel, version = panel_data
+
+        if is_superpanel == 1:
+            # get the subpanels ids associated with the superpanel
+            subpanel_rows = session.query(
+                superpanel_table.c.panel_id
+            ).filter(superpanel_table.c.superpanel_id == panel_id).all()
+            # queries return list of tuples so I get the first ele which is
+            # the panel_id
+            subpanel_ids = [
+                subpanel_data[0] for subpanel_data in subpanel_rows
+            ]
+
+            for subpanel_id in subpanel_ids:
+                for gene_id in gene_panels[subpanel_id]:
+                    # write the genes while keeping the superpanel name
+                    output_data.add(
+                        (panel_name, str(version), genes[gene_id])
+                    )
+
+        elif is_superpanel == 0:
+            for gene_id in gene_panels[panel_id]:
+                output_data.add(
+                    (panel_name, str(version), genes[gene_id])
+                )
+
+        else:
+            LOGGER.error(
+                f"{panel_name} doesn't have a superpanel status or a "
+                "normal panel status --> check database, check importing"
+            )
+
+    # sort the data using panel names and genes
+    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[2]))
 
     if not os.path.exists("sql_dump"):
         os.mkdir("sql_dump")
@@ -97,11 +144,9 @@ def generate_genepanels(session, meta):
     output_file = f"sql_dump/{get_date()}_genepanels.tsv"
 
     with open(output_file, "w") as f:
-        # Go through the panel_genes links
-        for panel_id, gene_ids in gene_panels.items():
-            for gene_id in gene_ids:
-                # Use the panel and gene ids to get panel name and gene symbol
-                f.write(f"{panels[panel_id]}\t{genes[gene_id]}\n")
+        for row in sorted_output_data:
+            data = "\t".join(row)
+            f.write(f"{data}\n")
 
     LOGGER.info(f"Created genepanels file: {output_file}")
 
@@ -132,45 +177,65 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     LOGGER.info(f"Created gms panels: {out_folder}")
 
 
-def generate_g2t(g2t: str, hgmd_dict: dict, nirvana_dict: dict):
+def generate_g2t(session, meta):
     """ Generate g2t file and genes that have no transcripts file
 
     Args:
-        g2t (str): g2t file (gene\ttranscript)
-        hgmd_dict (dict): HGMD dict
-        nirvana_dict (dict): nirvana dict
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
     """
+
+    msg = []
 
     LOGGER.info("Creating g2t file and no transcript file")
 
-    genes = []
+    if not os.path.exists("sql_dump"):
+        os.mkdir("sql_dump")
 
-    with open(g2t) as f:
-        for line in f:
-            gene, transcript = line.strip().split()
-            genes.append(gene)
+    gene_tb = meta.tables["gene"]
+    transcript_tb = meta.tables["transcript"]
 
-    no_transcript_file = open(f"{get_date()}_no_transcript_gene", "w")
-    transcript_file = open(f"{get_date()}_g2t", "w")
+    # gather all genes with a clinical transcript
+    genes_with_transcript = session.query(gene_tb).filter(
+        gene_tb.c.clinical_transcript_id != "NULL"
+    ).all()
 
-    for gene in genes:
-        transcript_dict, clinical_transcript = assign_transcript(
-            gene, hgmd_dict, nirvana_dict
+    # get a dict of gene symbol to clinical transcript id
+    g2t = {row[1]: row[2] for row in genes_with_transcript}
+
+    with open(f"sql_dump/{get_date()}_g2t", "w") as f:
+        for gene, transcript_id in sorted(g2t.items()):
+            # get the transcript using the clinical transcript id
+            transcript = session.query(transcript_tb).filter(
+                transcript_tb.c.id == transcript_id
+            ).one()[1:3]
+
+            f.write(f"{gene}\t{'.'.join(transcript)}\n")
+
+    msg.append(f"Created g2t file 'sql_dump/{get_date()}_g2t'")
+
+    # gather all genes without a clinical transcript
+    genes_with_no_transcript = session.query(gene_tb).filter(
+        gene_tb.c.clinical_transcript_id == None
+    ).all()
+
+    if genes_with_no_transcript:
+        # take their gene symbols
+        genes = [row[1] for row in genes_with_no_transcript]
+
+        with open(f"sql_dump/{get_date()}_no_transcript_gene", "w") as f:
+            for symbol in sorted(genes):
+                f.write(f"{symbol}\n")
+
+        msg.append(
+            "Created genes with no transcript file: "
+            f"'sql_dump/{get_date()}_no_transcript_gene'"
         )
+    else:
+        msg.append("All genes have a transcript")
 
-        if transcript_dict:
-            transcript_file.write(f"{gene}\t{clinical_transcript}\n")
-        else:
-            no_transcript_file.write(f"{gene}\n")
-
-    no_transcript_file.close()
-    transcript_file.close()
-
-    msg = (
-        f"Created g2t file '{get_date()}_g2t' and no transcript file "
-        f"'{get_date()}_no_transcript_gene'"
-    )
-    LOGGER.info(msg)
+    for info in msg:
+        LOGGER.info(info)
 
 
 def write_django_jsons(json_lists: list):
@@ -408,7 +473,6 @@ def create_django_json(
     for superpanel_id, superpanel in enumerate(superpanel_dict, panel_id+1):
         subpanel_pks = []
         superpanel_data = superpanel_dict[superpanel]
-        print(superpanel_data["name"])
 
         for subpanel in superpanel_data["subpanels"]:
             subpanel_id = superpanel_data["subpanels"][subpanel]["id"]
@@ -774,7 +838,8 @@ def generate_sample2panels(session, meta, gemini_dump):
 
     Args:
         session (SQLAlchemy Session): Session to make queries
-        meta (SQLAlchemy metadata): Metadata to get the tables from the existing db
+        meta (SQLAlchemy metadata): Metadata to get the tables from the
+                                    existing db
         gemini_dump (file_path): Gemini dump file
 
     Returns:
@@ -790,6 +855,8 @@ def generate_sample2panels(session, meta, gemini_dump):
     test_table = meta.tables["test"]
     test_panel_table = meta.tables["test_panel"]
     test_gene_table = meta.tables["test_gene"]
+    panel_table = meta.tables["panel"]
+    superpanel_table = meta.tables["superpanel"]
     panel_gene_table = meta.tables["panel_gene"]
     gene_table = meta.tables["gene"]
 
@@ -819,15 +886,63 @@ def generate_sample2panels(session, meta, gemini_dump):
 
         # query genes from test_panel output
         elif panel_id:
-            panels_genes = session.query(
-                gene_table.c.symbol
-            ).outerjoin(panel_gene_table).filter(
-                panel_gene_table.c.panel_id == panel_id
-            ).all()
+            panels_genes = None
 
-            panels_genes = [gene[0] for gene in panels_genes]
+            # check if the panel is a superpanel:
+            is_superpanel = session.query(panel_table.c.is_superpanel).filter(
+                panel_table.c.id == panel_id
+            ).one()[0]
+
+            if is_superpanel == 1:
+                # get the subpanels associated
+                subpanel_rows = session.query(
+                    superpanel_table.c.panel_id
+                ).filter(
+                    superpanel_table.c.superpanel_id == panel_id
+                ).all()
+
+                # extract the subpanel ids
+                subpanel_ids = [row[0] for row in subpanel_rows]
+
+                # get genes associated to the superpanel
+                panels_genes = session.query(
+                    gene_table.c.symbol
+                ).outerjoin(panel_gene_table).filter(
+                    panel_gene_table.c.panel_id.in_(subpanel_ids)
+                ).all()
+
+                panels_genes = [gene[0] for gene in panels_genes]
+
+            # not a superpanel
+            elif is_superpanel == 0:
+                panels_genes = session.query(
+                    gene_table.c.symbol
+                ).outerjoin(panel_gene_table).filter(
+                    panel_gene_table.c.panel_id == panel_id
+                ).all()
+
+                panels_genes = [gene[0] for gene in panels_genes]
+
+            else:
+                LOGGER.error(
+                    f"{panel_id} doesn't have a superpanel status or a "
+                    "normal panel status --> check database, check importing"
+                )
 
             gemini2genes[gemini_name].update(panels_genes)
+
+    # we want a pretty file so store the data that we want to output in a nice
+    # way
+    output_data = set()
+
+    for sample, panel in sample2gm_panels.items():
+        # match gemini names from the dump to the genes in the db
+        if panel in gemini2genes:
+            for gene in gemini2genes[panel]:
+                output_data.add((sample, panel, "NA", gene))
+
+    # and sort it using sample id and the gene symbol
+    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
 
     if not os.path.exists("sql_dump"):
         os.mkdir("sql_dump")
@@ -835,11 +950,9 @@ def generate_sample2panels(session, meta, gemini_dump):
     output_file = f"sql_dump/{get_date()}_sample2panels.tsv"
 
     with open(output_file, "w") as f:
-        for sample, panel in sample2gm_panels.items():
-            # match gemini names from the dump to the genes in the db
-            if panel in gemini2genes:
-                for gene in gemini2genes[panel]:
-                    f.write(f"{sample}\t{panel}\tNA\t{gene}\n")
+        for row in sorted_output_data:
+            data = "\t".join(row)
+            f.write(f"{data}\n")
 
     LOGGER.info(f"Created sample2panels file: {output_file}")
 
