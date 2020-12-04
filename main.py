@@ -70,9 +70,8 @@ def main(**param):
     elif param["command"] == "generate":
         # Generate g2t + genes without transcript files
         if param["g2t"]:
-            ops.generate.generate_g2t(
-                param["g2t"], hgmd_dict, nirvana_dict
-            )
+            session, meta = ops.utils.connect_to_db(user, passwd, host)
+            ops.generate.generate_g2t(session, meta)
 
         # Generate gms panel files with only green genes
         if param["gene_files"]:
@@ -196,7 +195,7 @@ if __name__ == "__main__":
         help="Generate all panelapp dump"
     )
     generate.add_argument(
-        "-g2t", "--g2t", help="Genes2transcript file"
+        "-g2t", "--g2t", action="store_true", help="Genes2transcript file"
     )
     generate.add_argument(
         "-gf", "--gene_files", action="store_true",
