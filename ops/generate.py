@@ -4,7 +4,7 @@ import os
 
 from .logger import setup_logging
 from .utils import (
-    get_date, assign_transcript, parse_gemini_dump
+    get_date, parse_gemini_dump
 )
 
 
