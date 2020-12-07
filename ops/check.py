@@ -254,7 +254,7 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                     if len(db_exons) != len(exon_data):
                         logging_dict.setdefault("exon", []).append((
-                            f"{panel_name} - {symbol} - Nb of links from "
+                            f"{panel_name} - {symbol} - Number of links from "
                             f"'{refseq}' to the exons is not what is expected"
                         ))
                         logging_dict.setdefault("exon", []).append((
@@ -273,8 +273,8 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                     if len(db_regions) != len(exon_data):
                         logging_dict.setdefault("region", []).append((
-                            f"{panel_name} - {symbol} - {tx}: Nb of regions "
-                            f"for {refseq} is not what is expected"
+                            f"{panel_name} - {symbol} - {tx}: Number of "
+                            f"regions for {refseq} is not what is expected"
                         ))
 
                     exons = set()
@@ -292,9 +292,9 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                         if (db_chrom, db_start, db_end) not in exons:
                             logging_dict.setdefault("region", []).append((
                                 f"{panel_name} - {symbol} - {tx}: "
-                                f"Region {db_chrom}:{db_start}-{db_end} (db) "
-                                f"is not present in the exons of {refseq} "
-                                "panelapp dump"
+                                f"Region {db_chrom}:{db_start}-{db_end} "
+                                "(database) is not present in the exons of "
+                                f"{refseq} panelapp dump"
                             ))
 
         str_values = list(panelapp_dict[str(panelapp_id)]["strs"])
@@ -317,8 +317,8 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                 # Gene associated with the str is not correct
                 if symbol != str_dict[name]["gene"]:
                     logging_dict.setdefault("str", []).append(
-                        f"{panel_name} - {name}: '{symbol}' (db) is not equal "
-                        f"to {str_dict[name]['gene']} (panelapp)"
+                        f"{panel_name} - {name}: '{symbol}' (database) is not "
+                        f"equal to {str_dict[name]['gene']} (panelapp)"
                     )
 
                 # data stored for the str is not correct
@@ -384,8 +384,8 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                 if (variant_type != cnv_dict[name]["type"]):
                     logging_dict.setdefault("cnv", []).append(
                         f"{panel_name} - {name}: Type of cnv is incorrect "
-                        f"{variant_type} (db) vs {cnv_dict[name]['type']} "
-                        "(panelapp)"
+                        f"{variant_type} (database) vs "
+                        f"{cnv_dict[name]['type']} (panelapp)"
                     )
 
                 reg_cnv_query = session.query(
@@ -454,7 +454,7 @@ def check_test_against_db(session, meta, test2target: dict):
     # in the xls
     if len(test2target) != len(db_tests):
         msg = (
-            "Nb of tests in the xls is not the same has in the database: "
+            "Number of tests in the xls is not the same has in the database: "
             f"xls {len(test2target)} vs db {len(db_tests)}"
         )
         LOGGER.error(msg)
