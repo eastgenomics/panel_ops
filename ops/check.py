@@ -41,10 +41,14 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
     Args:
         folder (str): Folder in which panels are stored
-        session (SQLAlchemysession): Session object 
+        session (SQLAlchemy session): Session object
         meta (SQLAlchemy MetaData): Metadata object
         data_dicts (tuple): Tuple of dicts
     """
+
+    LOGGER.info(f"Checking database against {folder}")
+
+    logging_dict = {}
 
     (
         panelapp_dict, superpanel_dict, gene_dict, str_dict,
@@ -78,19 +82,26 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
         panel_tb.c.panelapp_id.in_(superpanel_values)
     ).all()
 
-    if len(db_superpanels) == len(superpanel_dict):
-        db_superpanels_id = set([row[1] for row in db_superpanels])
-        superpanel_diff = db_superpanels_id.symmetric_difference(
-            set(superpanel_values)
-        )
+    db_superpanels_id = set([row[1] for row in db_superpanels])
+    db_superpanel_diff = db_superpanels_id - set(superpanel_values)
+    panelapp_superpanel_diff = set(superpanel_values) - db_superpanels_id
 
-        if superpanel_diff:
-            msg = f"{superpanel_diff} is not present in both sets"
-            LOGGER.error(msg)
-            return
+    if len(db_superpanels) == len(superpanel_dict):
+        if db_superpanel_diff or panelapp_superpanel_diff:
+            logging_dict.setdefault("superpanel", []).append(
+                f"{db_superpanel_diff} is missing from the panelapp dump"
+            )
+            logging_dict["superpanel"].append(
+                f"{panelapp_superpanel_diff} is missing from the database"
+            )
 
     else:
-        LOGGER.error("Expected nb of superpanels is incorrect")
+        logging_dict.setdefault("superpanel", []).append(
+            f"{db_superpanel_diff} is missing from the panelapp dump"
+        )
+        logging_dict["superpanel"].append(
+            f"{panelapp_superpanel_diff} is missing from the database"
+        )
 
     # Check subpanels associated to superpanels
     for superpanel_row in db_superpanels:
@@ -118,12 +129,10 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
             ) = subpanel_row
 
             if sub_name != subpanel_dict[str(sub_panelapp_id)]["name"]:
-                msg = (
-                    f"{panel_name}: Subpanel '{sub_name}' is not equal to "
-                    f"what is expected for '{sub_panelapp_id}'"
+                logging_dict.setdefault("subpanel", []).append(
+                    f"{panel_name}: Subpanel name do not match: db "
+                    f"'{sub_name}' vs panelapp '{sub_panelapp_id}'"
                 )
-                LOGGER.error(msg)
-                return
 
     # Get all panels using panelapp ids in panelapp dict
     panel_values = [int(id_) for id_ in panelapp_dict.keys()]
@@ -131,17 +140,25 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
         panel_tb.c.panelapp_id.in_(panel_values)
     ).all()
 
-    if len(db_panels) == len(panelapp_dict):
-        db_panels_id = set([row[1] for row in db_panels])
-        panel_diff = db_panels_id.symmetric_difference(set(panel_values))
+    db_panels_id = set([row[1] for row in db_panels])
+    db_panel_diff = db_panels_id - set(panel_values)
+    panelapp_panel_diff = set(panel_values) - db_panels_id
 
-        if panel_diff:
-            msg = f"{panel_diff} is not present in both sets"
-            LOGGER.error(msg)
-            return
+    if len(db_panels) == len(panelapp_dict):
+        if db_panel_diff or panelapp_panel_diff:
+            logging_dict.setdefault("panel", []).append(
+                f"{db_panel_diff} is missing from the panelapp dump"
+            )
+            logging_dict["panel"].append(
+                f"{panelapp_panel_diff} is missing from the panelapp dump"
+            )
     else:
-        LOGGER.error("Expected nb of panels is incorrect")
-        return
+        logging_dict.setdefault("panel", []).append(
+            f"{db_panel_diff} is missing from the panelapp dump"
+        )
+        logging_dict["panel"].append(
+            f"{panelapp_panel_diff} is missing from the panelapp dump"
+        )
 
     for panel_row in db_panels:
         (
@@ -159,23 +176,29 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
             panel_gene_tb.c.panel_id == panel_id
         ).all()
 
-        if len(gene_values) != len(db_genes):
-            msg = (
-                f"{panel_name}: Number of genes is incorrect"
-            )
-            LOGGER.error(msg)
-            return
-        else:
-            db_genes_symbols = set([row[1] for row in db_genes])
-            gene_diff = db_genes_symbols.symmetric_difference(
-                set(gene_values)
-            )
+        db_genes_symbols = set([row[1] for row in db_genes])
+        db_gene_diff = db_genes_symbols - set(gene_values)
+        panelapp_gene_diff = set(gene_values) - db_genes_symbols
 
-            if gene_diff:
-                LOGGER.error(
-                    f"{panel_name}: {gene_diff} is not in both list of genes"
+        if len(gene_values) == len(db_panel_genes):
+            if db_gene_diff or panelapp_gene_diff:
+                logging_dict.setdefault("gene", []).append(
+                    f"{panel_name}: {db_gene_diff} is missing from the "
+                    "panelapp dump"
                 )
-                return
+                logging_dict.setdefault("gene", []).append(
+                    f"{panel_name}: {panelapp_gene_diff} is missing from the "
+                    "db"
+                )
+        else:
+            logging_dict.setdefault("gene", []).append(
+                f"{panel_name}: {db_gene_diff} is missing from the "
+                "panelapp dump"
+            )
+            logging_dict.setdefault("gene", []).append(
+                f"{panel_name}: {panelapp_gene_diff} is missing from the "
+                "db"
+            )
 
         for gene_row in db_genes:
             gene_id, symbol, clin_tx_id = gene_row
@@ -191,35 +214,38 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                     transcript_tb.c.refseq.in_(refseq_values)
                 ).all()
 
-                if len(transcript_data) != len(db_transcripts):
-                    msg = (
-                        f"{panel_name} - {symbol}: Nb of transcripts is not "
-                        "what is excepted"
-                    )
-                    LOGGER.error(msg)
-                    return
-                else:
-                    db_transcripts_refseq = set(
-                        [row[1] for row in db_transcripts]
-                    )
-                    tx_diff = db_transcripts_refseq.symmetric_difference(
-                        set(refseq_values)
-                    )
+                db_transcripts_refseq = set(
+                    [row[1] for row in db_transcripts]
+                )
+                db_tx_diff = db_transcripts_refseq - set(refseq_values)
+                panelapp_tx_diff = set(refseq_values) - db_transcripts_refseq
 
-                    if tx_diff:
-                        msg = (
-                            f"{panel_name} - {symbol}: {tx_diff} is not in "
-                            "both list of tx"
-                        )
-                        LOGGER.error(msg)
-                        return
+                if len(transcript_data) == len(db_transcripts):
+                    if db_tx_diff or panelapp_tx_diff:
+                        logging_dict.setdefault("transcript", []).append((
+                            f"{panel_name} - {symbol}: {db_tx_diff} is "
+                            "missing from the panelapp dump"
+                        ))
+                        logging_dict.setdefault("transcript", []).append((
+                            f"{panel_name} - {symbol}: {panelapp_tx_diff} is "
+                            "missing from the panelapp dump"
+                        ))
+                else:
+                    logging_dict.setdefault("transcript", []).append((
+                        f"{panel_name} - {symbol}: {db_tx_diff} is "
+                        "missing from the panelapp dump"
+                    ))
+                    logging_dict.setdefault("transcript", []).append((
+                        f"{panel_name} - {symbol}: {panelapp_tx_diff} is "
+                        "missing from the panelapp dump"
+                    ))
 
                 for tx in db_transcripts:
                     tx_id, refseq, tx_version, tx_gene_id = tx
                     tx = f"{refseq}.{tx_version}"
                     exon_data = gene_dict[symbol]["transcripts"][tx]["exons"]
 
-                    # Get exons for the transcritps
+                    # Get exons for the transcripts
                     exon_values = [int(nb) for nb in exon_data.keys()]
                     db_exons = session.query(exon_tb).filter(
                         exon_tb.c.number.in_(exon_values),
@@ -227,12 +253,15 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                     ).all()
 
                     if len(db_exons) != len(exon_data):
-                        msg = (
-                            f"{panel_name} - {symbol} - Nb of exons for "
-                            f"'{refseq}' is not what is expected"
-                        )
-                        LOGGER.error(msg)
-                        return
+                        logging_dict.setdefault("exon", []).append((
+                            f"{panel_name} - {symbol} - Nb of links from "
+                            f"'{refseq}' to the exons is not what is expected"
+                        ))
+                        logging_dict.setdefault("exon", []).append((
+                            f"{panel_name} - {symbol} - {refseq} - "
+                            f"{len(db_exons)} in the db against "
+                            f"{len(exon_data)} in the panelapp dump"
+                        ))
 
                     # Get all regions for the transcripts
                     exon_query = session.query(exon_tb.c.region_id).filter(
@@ -243,12 +272,10 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                     ).all()
 
                     if len(db_regions) != len(exon_data):
-                        msg = (
+                        logging_dict.setdefault("region", []).append((
                             f"{panel_name} - {symbol} - {tx}: Nb of regions "
                             f"for {refseq} is not what is expected"
-                        )
-                        LOGGER.error(msg)
-                        return
+                        ))
 
                     exons = set()
 
@@ -263,13 +290,12 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                         region_id, db_chrom, db_start, db_end, ref = region
 
                         if (db_chrom, db_start, db_end) not in exons:
-                            msg = (
+                            logging_dict.setdefault("region", []).append((
                                 f"{panel_name} - {symbol} - {tx}: "
-                                f"Region {db_chrom}:{db_start}-{db_end} is "
-                                f"not present in the exons of {refseq}"
-                            )
-                            LOGGER.error(msg)
-                            return
+                                f"Region {db_chrom}:{db_start}-{db_end} (db) "
+                                f"is not present in the exons of {refseq} "
+                                "panelapp dump"
+                            ))
 
         str_values = list(panelapp_dict[str(panelapp_id)]["strs"])
 
@@ -290,11 +316,10 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                 # Gene associated with the str is not correct
                 if symbol != str_dict[name]["gene"]:
-                    msg = (
-                        f"{panel_name} - {name}: '{symbol}' is not correct"
+                    logging_dict.setdefault("str", []).append(
+                        f"{panel_name} - {name}: '{symbol}' (db) is not equal "
+                        f"to {str_dict[name]['gene']} (panelapp)"
                     )
-                    LOGGER.error(msg)
-                    return
 
                 # data stored for the str is not correct
                 if (
@@ -302,17 +327,21 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
                     str(nb_repeats) != str_dict[name]["nb_normal_repeats"] or
                     str(nb_patho_repeats) != str_dict[name]["nb_pathogenic_repeats"]
                 ):
-                    msg = (
-                        f"{panel_name} - {name}: Data for the str is not correct"
+                    logging_dict.setdefault("str", []).append(
+                        f"{panel_name} - {name}: Data for the str is not "
+                        "correct"
                     )
-                    LOGGER.error(msg)
-                    msg = f"{repeated_seq} != {str_dict[name]['seq']}"
-                    LOGGER.debug(msg)
-                    msg = f"{nb_repeats} != {str_dict[name]['nb_normal_repeats']}"
-                    LOGGER.debug(msg)
-                    msg = f"{nb_patho_repeats} != {str_dict[name]['nb_pathogenic_repeats']}"
-                    LOGGER.debug(msg)
-                    return
+                    logging_dict.setdefault("str", []).append(
+                        f"{repeated_seq} != {str_dict[name]['seq']}"
+                    )
+                    logging_dict.setdefault("str", []).append(
+                        f"{nb_repeats} != "
+                        f"{str_dict[name]['nb_normal_repeats']}"
+                    )
+                    logging_dict.setdefault("str", []).append(
+                        f"{nb_patho_repeats} != "
+                        f"{str_dict[name]['nb_pathogenic_repeats']}"
+                    )
 
                 reg_str_query = session.query(
                     region_str_tb.c.region_id
@@ -328,19 +357,17 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            msg = (
+                            logging_dict.setdefault("str", []).append((
                                 f"{panel_name} - {name}: "
                                 f"{db_chrom}:{db_start}-{db_end} not in GRCh37"
-                            )
-                            LOGGER.error(msg)
+                            ))
 
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            msg = (
+                            logging_dict.setdefault("str", []).append((
                                 f"{panel_name} - {name}: "
                                 f"{db_chrom}:{db_start}-{db_end} not in GRCh38"
-                            )
-                            LOGGER.error(msg)
+                            ))
 
         cnv_values = list(panelapp_dict[str(panelapp_id)]["cnvs"])
 
@@ -355,9 +382,11 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                 # check the type of the cnv
                 if (variant_type != cnv_dict[name]["type"]):
-                    msg = f"{panel_name} - {name}: Type of cnv is incorrect"
-                    LOGGER.error(msg)
-                    return
+                    logging_dict.setdefault("cnv", []).append(
+                        f"{panel_name} - {name}: Type of cnv is incorrect "
+                        f"{variant_type} (db) vs {cnv_dict[name]['type']} "
+                        "(panelapp)"
+                    )
 
                 reg_cnv_query = session.query(
                     region_cnv_tb.c.region_id
@@ -373,23 +402,28 @@ def check_panelapp_dump_against_db(folder, session, meta, data_dicts: tuple):
 
                     if ref == grch37_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh37"]:
-                            msg = (
+                            logging_dict.setdefault("cnv", []).append((
                                 f"{panel_name} - {name}: "
                                 f"{db_chrom}:{db_start}-{db_end} not in GRCh37"
-                            )
-                            LOGGER.error(msg)
+                            ))
+
                     elif ref == grch38_id:
                         if (str(db_start), str(db_end)) not in region_dict[db_chrom]["GRCh38"]:
-                            msg = (
+                            logging_dict.setdefault("cnv", []).append((
                                 f"{panel_name} - {name}: "
                                 f"{db_chrom}:{db_start}-{db_end} not in GRCh38"
-                            )
-                            LOGGER.error(msg)
+                            ))
 
-    msg = (
-        f"Checking against panelapp dump from {folder} correct on {get_date()}"
-    )
-    LOGGER.info(msg)
+    if logging_dict.values():
+        for log_type, msgs in logging_dict.items():
+            for error_msg in msgs:
+                LOGGER.error(error_msg)
+    else:
+        msg = (
+            f"Checking against panelapp dump from {folder} against database "
+            f"on {get_date()}: correct"
+        )
+        LOGGER.info(msg)
 
     return True
 
