@@ -95,7 +95,7 @@ def main(**param):
         # Generate a bioinformatic manifest type file for reports
         if param["manifest"]:
             session, meta = ops.utils.connect_to_db(user, passwd, host)
-            sample2panels = ops.generate.generate_sample2panels(
+            sample2panels = ops.generate.generate_manifest(
                 session, meta, param["manifest"]
             )
 
