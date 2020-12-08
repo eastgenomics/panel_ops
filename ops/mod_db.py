@@ -35,7 +35,7 @@ def import_django_fixture(path_to_json):
         management.call_command(loaddata.Command(), path_to_json)
     except Exception as e:
         LOGGER.error("Importing gone wrong")
-        LOGGER.debug(f"{e}")
+        LOGGER.error(f"{e}")
         return False
     else:
         return True
