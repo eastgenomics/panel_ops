@@ -843,16 +843,15 @@ def generate_gemini_names(session, meta, test2targets: dict):
 
     test_table = meta.tables["test"]
 
-    db_tests = [row for row in session.query(test_table.c.gemini_name)]
+    db_tests = [row[0] for row in session.query(test_table.c.test_id)]
 
     if len(db_tests) == len(test2targets):
         LOGGER.info("Number of tests in db as expected")
     else:
-        LOGGER.error((
-            "Number of tests in the national test directory: "
-            f"{len(test2targets)}"
-        ))
-        LOGGER.error(f"Tests retrieved from the database: {db_tests}")
+        LOGGER.error("Tests in the national test directory: ")
+        LOGGER.error(f"{sorted(list(test2targets.keys()))}")
+        LOGGER.error("Tests retrieved from the database:")
+        LOGGER.error(f"{sorted(db_tests)}")
         return
 
     output_index = 1
