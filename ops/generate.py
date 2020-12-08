@@ -163,6 +163,9 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     Args:
         gms_panels (dict): Dict of gms panels
         confidence_level (int, optional): Confidence level of genes to get. Defaults to 3.
+
+    Returns:
+        str: Output folder path
     """
 
     LOGGER.info("Creating gms panels")
@@ -187,6 +190,8 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
 
     LOGGER.info(f"Created gms panels: {output_folder}")
 
+    return output_folder
+
 
 def generate_g2t(session, meta):
     """ Generate g2t file and genes that have no transcripts file
@@ -194,6 +199,9 @@ def generate_g2t(session, meta):
     Args:
         session (SQLAlchemy session): Session object
         meta (SQLAlchemy MetaData): Metadata object
+
+    Returns:
+        str: Output folder path
     """
 
     msg = []
@@ -259,6 +267,8 @@ def generate_g2t(session, meta):
 
     for info in msg:
         LOGGER.info(info)
+
+    return output_folder
 
 
 def write_django_jsons(json_lists: list):
@@ -837,6 +847,9 @@ def generate_gemini_names(session, meta, test2targets: dict):
         session (SQLAlchemy session): Session object
         meta (SQLAlchemy MetaData): Metadata object
         test2targets (dict): Dict from the xls
+
+    Returns:
+        str: Path to the output file
     """
 
     LOGGER.info("Creating gemini names file")
@@ -871,6 +884,8 @@ def generate_gemini_names(session, meta, test2targets: dict):
             f.write(f"{gemini_name}\n")
 
     LOGGER.info(f"Created gemini names file: {output_file}")
+
+    return output_file
 
 
 def generate_sample2panels(session, meta, gemini_dump):
@@ -1013,6 +1028,9 @@ def generate_panel_names(session, meta, gms):
         meta (SQLAlchemy metadata): Metadata to get the tables from the
                                     existing db
         gms (bool): Indicate if user wants gms or all panels
+
+    Returns:
+        str: Path to the output file
     """
 
     LOGGER.info("Creating panel names file")
@@ -1050,3 +1068,5 @@ def generate_panel_names(session, meta, gms):
             f.write(f"{name}_{version}\n")
 
     LOGGER.info(f"Created panel names file: {output_file}")
+
+    return output_file
