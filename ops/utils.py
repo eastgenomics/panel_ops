@@ -272,7 +272,7 @@ def create_panelapp_dict(
                         panel_dict["signedoff"] = signedoff
 
                         if entity_type == "gene":
-                            gene = line[5]
+                            gene, hgnc_id = line[5:]
 
                             transcript2exon, clinical_transcript = assign_transcript(
                                 gene, hgmd_dict, nirvana_dict
@@ -280,6 +280,7 @@ def create_panelapp_dict(
 
                             panel_dict["genes"].add(gene)
                             gene_dict[gene]["check"] = False
+                            gene_dict[gene]["hgnc_id"] = hgnc_id
 
                             if transcript2exon and clinical_transcript:
                                 gene_dict[gene]["transcripts"] = transcript2exon
@@ -297,13 +298,16 @@ def create_panelapp_dict(
 
                         elif entity_type == "str":
                             (
-                                name, gene, seq, nb_normal_repeats,
+                                name, gene, hgnc_id, seq, nb_normal_repeats,
                                 nb_pathogenic_repeats, chrom,
                                 grch37_coor, grch38_coor
                             ) = line[5:]
 
+                            panel_dict["strs"].add(name)
+
                             str_dict[name]["check"] = False
                             str_dict[name]["gene"] = gene
+                            str_dict[name]["hgnc_id"] = hgnc_id
                             str_dict[name]["seq"] = seq
                             str_dict[name]["nb_normal_repeats"] = nb_normal_repeats
                             str_dict[name]["nb_pathogenic_repeats"] = nb_pathogenic_repeats
