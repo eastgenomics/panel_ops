@@ -1,6 +1,6 @@
 from collections import defaultdict
 import json
-import os
+from pathlib import Path
 
 from .logger import setup_logging
 from .utils import (
@@ -26,16 +26,14 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
 
     output_dump = f"{type_panel}_panelapp_dump"
     output_date = f"{get_date()}"
-    output_folder = f"{output_dump}/{output_date}"
+    output_index = 1
+    output_folder = f"{output_dump}/{output_date}-{output_index}"
 
-    if not os.path.exists(output_dump) and not os.path.isdir(output_dump):
-        os.mkdir(output_dump)
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"{output_dump}/{output_date}-{output_index}"
 
-        if (
-            not os.path.exists(output_folder) and
-            not os.path.isdir(output_folder)
-        ):
-            os.mkdir(output_folder)
+    Path(output_folder).mkdir(parents=True)
 
     for panel_id, panel in all_panels.items():
         if panel.is_superpanel():
@@ -138,10 +136,16 @@ def generate_genepanels(session, meta):
     # sort the data using panel names and genes
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[2]))
 
-    if not os.path.exists("sql_dump"):
-        os.mkdir("sql_dump")
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_genepanels"
 
-    output_file = f"sql_dump/{get_date()}_genepanels.tsv"
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_genepanels"
+
+    Path(output_folder).mkdir(parents=True)
+
+    output_file = f"{output_folder}/{get_date()}_genepanels.tsv"
 
     with open(output_file, "w") as f:
         for row in sorted_output_data:
@@ -157,24 +161,31 @@ def generate_gms_panels(gms_panels, confidence_level: int = 3):
     """ Generate gene files for GMS panels
 
     Args:
+        gms_panels (dict): Dict of gms panels
         confidence_level (int, optional): Confidence level of genes to get. Defaults to 3.
     """
 
     LOGGER.info("Creating gms panels")
 
-    out_folder = f"{get_date()}_gms_panels"
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_gms_panels"
 
-    if not os.path.exists(out_folder) and not os.path.isdir(out_folder):
-        os.mkdir(out_folder)
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_gms_panels"
+
+    Path(output_folder).mkdir(parents=True)
 
     for panel_id, panel in gms_panels.items():
         panel_file = f"{panel.get_name()}_{panel.get_version()}"
 
-        with open(f"{out_folder}/{panel_file}", "w") as f:
-            for gene in panel.get_genes(confidence_level):
-                f.write(f"{gene}\n")
+        output_file = f"{output_folder}/{panel_file}"
 
-    LOGGER.info(f"Created gms panels: {out_folder}")
+        with open(output_file, "w") as f:
+            for gene, hgnc_id in panel.get_genes(confidence_level):
+                f.write(f"{gene}\t{hgnc_id}\n")
+
+    LOGGER.info(f"Created gms panels: {output_folder}")
 
 
 def generate_g2t(session, meta):
@@ -189,8 +200,14 @@ def generate_g2t(session, meta):
 
     LOGGER.info("Creating g2t file and no transcript file")
 
-    if not os.path.exists("sql_dump"):
-        os.mkdir("sql_dump")
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_g2t"
+
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_g2t"
+
+    Path(output_folder).mkdir(parents=True)
 
     gene_tb = meta.tables["gene"]
     transcript_tb = meta.tables["transcript"]
@@ -201,9 +218,11 @@ def generate_g2t(session, meta):
     ).all()
 
     # get a dict of gene symbol to clinical transcript id
-    g2t = {row[1]: row[2] for row in genes_with_transcript}
+    g2t = {row[1]: row[3] for row in genes_with_transcript}
 
-    with open(f"sql_dump/{get_date()}_g2t", "w") as f:
+    g2t_file = f"{output_folder}/{get_date()}_g2t.tsv"
+
+    with open(g2t_file, "w") as f:
         for gene, transcript_id in sorted(g2t.items()):
             # get the transcript using the clinical transcript id
             transcript = session.query(transcript_tb).filter(
@@ -212,7 +231,7 @@ def generate_g2t(session, meta):
 
             f.write(f"{gene}\t{'.'.join(transcript)}\n")
 
-    msg.append(f"Created g2t file 'sql_dump/{get_date()}_g2t'")
+    msg.append(f"Created g2t file {g2t_file}")
 
     # gather all genes without a clinical transcript
     genes_with_no_transcript = session.query(gene_tb).filter(
@@ -223,16 +242,20 @@ def generate_g2t(session, meta):
         # take their gene symbols
         genes = [row[1] for row in genes_with_no_transcript]
 
-        with open(f"sql_dump/{get_date()}_no_transcript_gene", "w") as f:
+        no_g2t_file = f"{output_folder}/{get_date()}_no_transcript_gene.txt"
+
+        with open(no_g2t_file, "w") as f:
             for symbol in sorted(genes):
                 f.write(f"{symbol}\n")
 
         msg.append(
             "Created genes with no transcript file: "
-            f"'sql_dump/{get_date()}_no_transcript_gene'"
+            f"{no_g2t_file}"
         )
     else:
-        msg.append("All genes have a transcript")
+        msg.append(
+            "No transcript file not created - all genes have a transcript"
+        )
 
     for info in msg:
         LOGGER.info(info)
@@ -257,34 +280,33 @@ def write_django_jsons(json_lists: list):
         for ele in data:
             all_elements.append(ele)
 
-    output_django = "django_fixtures"
+    output_index = 1
+    output_folder = f"django_fixtures/{get_date()}-{output_index}"
 
-    if not os.path.exists(output_django):
-        os.mkdir(output_django)
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"django_fixtures/{get_date()}-{output_index}"
 
-    if not os.path.exists(f"{output_django}/{today}"):
-        os.mkdir(f"{output_django}/{today}")
+    Path(output_folder).mkdir(parents=True)
 
-    output = f"{today}_json_dump"
+    output = f"{output_folder}/{today}_json_dump.json"
 
-    with open(
-        f"{output_django}/{today}/{output}.json", "w", encoding="utf-8"
-    ) as f:
-        json.dump(all_elements, f, ensure_ascii=False, indent=4)
+    with open(output, "w", encoding="utf-8") as f:
+        json.dump(all_elements, f, indent=4)
 
     for table, data in json_lists.items():
         table_output = f"{today}_{table}.json"
 
         with open(
-            f"{output_django}/{today}/{table_output}", "w", encoding="utf-8"
+            f"{output_folder}/{table_output}", "w", encoding="utf-8"
         ) as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+            json.dump(data, f, indent=4)
 
     LOGGER.info(
-        f"Created json dump for django import: {output_django}/{today}"
+        f"Created json dump for django import: {output_folder}"
     )
 
-    return output_django
+    return output_folder
 
 
 def get_django_json(model: str, pk: str, fields: dict):
@@ -368,6 +390,7 @@ def create_django_json(
 
         # Go through all the genes in the panel
         for gene in panel_dict["genes"]:
+            hgnc_id = gene_dict[gene]["hgnc_id"]
             clinical_transcript = gene_dict[gene]["clinical"]
             transcript_data = gene_dict[gene]["transcripts"]
 
@@ -375,7 +398,7 @@ def create_django_json(
                 # If gene not seen before, create gene json
                 pk_dict["gene"] += 1
                 gene_fields = {
-                    "symbol": gene,
+                    "symbol": gene, "hgnc_id": hgnc_id,
                     "clinical_transcript": clinical_transcript,
                 }
                 sub_gene_dict = get_django_json(
@@ -470,7 +493,7 @@ def create_django_json(
             )
 
     # Create the list for superpanels
-    for superpanel_id, superpanel in enumerate(superpanel_dict, panel_id+1):
+    for superpanel_id, superpanel in enumerate(superpanel_dict, panel_id + 1):
         subpanel_pks = []
         superpanel_data = superpanel_dict[superpanel]
 
@@ -506,6 +529,7 @@ def create_django_json(
 
     # Second pass because str have gene and if genes don't exist yet...
     for panelapp_id in panelapp_dict:
+        panel_name = panelapp_dict[panelapp_id]["name"]
         panel_pk = [
             panel_django["pk"]
             for panel_django in panel_json
@@ -515,11 +539,21 @@ def create_django_json(
         # Go through the strs
         for str_name in panelapp_dict[panelapp_id]["strs"]:
             str_gene = str_dict[str_name]["gene"]
+
             str_gene_pk = [
                 gene_data["pk"]
                 for gene_data in gene_json
                 if gene_data["fields"]["symbol"] == str_gene
-            ][0]
+            ]
+
+            if str_gene_pk == []:
+                LOGGER.warning(
+                    f"{panel_name} - {str_name} - Gene {str_gene} doesn't exist "
+                    "in the database"
+                )
+                str_gene_pk = None
+            else:
+                str_gene_pk = str_gene_pk[0]
 
             if str_dict[str_name]["check"] is False:
                 pk_dict["str"] += 1
@@ -812,18 +846,25 @@ def generate_gemini_names(session, meta, test2targets: dict):
     db_tests = [row for row in session.query(test_table.c.gemini_name)]
 
     if len(db_tests) == len(test2targets):
-        LOGGER.info("Nb of tests in db as expected")
+        LOGGER.info("Number of tests in db as expected")
     else:
-        LOGGER.error(
-            f"Nb of tests in the national test directory: {len(test2targets)}"
-        )
+        LOGGER.error((
+            "Number of tests in the national test directory: "
+            f"{len(test2targets)}"
+        ))
         LOGGER.error(f"Tests retrieved from the database: {db_tests}")
         return
 
-    if not os.path.exists("sql_dump"):
-        os.mkdir("sql_dump")
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_gemini_names"
 
-    output_file = f"sql_dump/{get_date()}_gemini_names.txt"
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_gemini_names"
+
+    Path(output_folder).mkdir(parents=True)
+
+    output_file = f"{output_folder}/{get_date()}_gemini_names.txt"
 
     with open(output_file, "w") as f:
         for test in db_tests:
@@ -944,10 +985,16 @@ def generate_sample2panels(session, meta, gemini_dump):
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
 
-    if not os.path.exists("sql_dump"):
-        os.mkdir("sql_dump")
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_sample2panels"
 
-    output_file = f"sql_dump/{get_date()}_sample2panels.tsv"
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_sample2panels"
+
+    Path(output_folder).mkdir(parents=True)
+
+    output_file = f"{output_folder}/{get_date()}_sample2panels.tsv"
 
     with open(output_file, "w") as f:
         for row in sorted_output_data:
@@ -963,14 +1010,24 @@ def generate_panel_names(session, meta, gms):
     """ Generate txt file with all the panel names
 
     Args:
-        session (): [description]
-        meta ([type]): [description]
-        gms ([type]): [description]
+        session (SQLAlchemy Session): Session to make queries
+        meta (SQLAlchemy metadata): Metadata to get the tables from the
+                                    existing db
+        gms (bool): Indicate if user wants gms or all panels
     """
 
     LOGGER.info("Creating panel names file")
 
     panel_table = meta.tables["panel"]
+
+    output_index = 1
+    output_folder = f"sql_dump/{get_date()}-{output_index}_panel_names"
+
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"sql_dump/{get_date()}-{output_index}_panel_names"
+
+    Path(output_folder).mkdir(parents=True)
 
     if gms is True:
         test_queries = sorted(session.query(
@@ -978,18 +1035,15 @@ def generate_panel_names(session, meta, gms):
         ).filter(
             panel_table.c.signedoff != "False"
         ).all(), key=lambda t: t[0])
-        output_file = f"sql_dump/{get_date()}_gms_panels.txt"
+        output_file = f"{output_folder}/{get_date()}_gms_panels.txt"
     elif gms is False:
         test_queries = sorted(session.query(
             panel_table.c.name, panel_table.c.version
         ).all(), key=lambda t: t[0])
-        output_file = f"sql_dump/{get_date()}_all_panels.txt"
+        output_file = f"{output_folder}/{get_date()}_all_panels.txt"
     else:
         test_queries = None
         output_file = None
-
-    if not os.path.exists("sql_dump"):
-        os.mkdir("sql_dump")
 
     with open(output_file, "w") as f:
         for row in test_queries:
