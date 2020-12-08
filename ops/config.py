@@ -7,6 +7,6 @@ path_to_panel_palace = "/home/egg-user/panels/panel_palace/"
 # Path to the panel_config folder
 path_to_panel_config = "/home/egg-user/panels/panel_config"
 
-# Ids for the HGMD pro vcf
-hgmd_dxid = "file-Fv1X0jQ40qBjj4GPKj196kjJ"
-hgmd_project = "project-Fv1Vzkj40qBfq0v38p7q50v8"
+# Ids for the HGMD pro vcf: 003_201203_HGMD_2020.3
+hgmd_project = "project-Fz4Q15Q42Z9YjYk110b3vGYQ"
+hgmd_dxid = "file-Fz4Q46Q42Z9ZfpZkFV1xFj7q"
