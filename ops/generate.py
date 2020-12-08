@@ -888,7 +888,7 @@ def generate_gemini_names(session, meta, test2targets: dict):
     return output_file
 
 
-def generate_sample2panels(session, meta, gemini_dump):
+def generate_manifest(session, meta, gemini_dump):
     """ Generate new bioinformatic manifest for the new database
 
     Args:
@@ -901,7 +901,7 @@ def generate_sample2panels(session, meta, gemini_dump):
         str: File path of the output file
     """
 
-    LOGGER.info("Creating sample2panels file")
+    LOGGER.info("Creating bioinformatic manifest file")
 
     # get the content of the gemini dump
     sample2gm_panels = parse_gemini_dump(gemini_dump)
@@ -1000,15 +1000,15 @@ def generate_sample2panels(session, meta, gemini_dump):
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
 
     output_index = 1
-    output_folder = f"sql_dump/{get_date()}-{output_index}_sample2panels"
+    output_folder = f"sql_dump/{get_date()}-{output_index}_bio_manifest"
 
     while Path(output_folder).is_dir():
         output_index += 1
-        output_folder = f"sql_dump/{get_date()}-{output_index}_sample2panels"
+        output_folder = f"sql_dump/{get_date()}-{output_index}_bio_manifest"
 
     Path(output_folder).mkdir(parents=True)
 
-    output_file = f"{output_folder}/{get_date()}_sample2panels.tsv"
+    output_file = f"{output_folder}/{get_date()}_bio_manifest.tsv"
 
     with open(output_file, "w") as f:
         for row in sorted_output_data:
