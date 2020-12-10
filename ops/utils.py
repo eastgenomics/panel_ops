@@ -506,7 +506,9 @@ def parse_gemini_dump(gemini_dump):
             if index == 0:
                 headers = {ele: j for j, ele in enumerate(line)}
             else:
-                sample2panels[line[headers["ExomeNumber"]]] = (
+                sample2panels.setdefault(
+                    line[headers["ExomeNumber"]], []
+                ).append(
                     line[headers["PanelDescription"]]
                 )
 
