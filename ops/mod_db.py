@@ -46,7 +46,19 @@ def import_django_fixture(path_to_json):
         return True
 
 
-def check_attributes_for_obj(obj, **attributes):
+def check_attributes_for_obj(obj, attributes):
+    """ Return bool on whether a django obj has the same attributes as the ones
+    given
+
+    Args:
+        obj (Django model obj): Django model obj
+        attributes (Dict): Dict of attributes for the Django obj
+
+    Returns:
+        bool: Bool on whether a django obj has the same attributes as the ones
+            given
+    """
+
     model_dict = model_to_dict(obj, fields=attributes.keys())
 
     if model_dict != attributes:
@@ -56,7 +68,19 @@ def check_attributes_for_obj(obj, **attributes):
 
 
 def update_panel_attributes(panel_obj, panelapp_id, panel_data):
-    msg = [f"{panelapp_id}"]
+    """ Return a logging msg, panel obj ready to be saved
+
+    Args:
+        panel_obj (Django model obj): Panel django object
+        panelapp_id (str): Panelapp id of the panel
+        panel_data (dict): Dict containing the panel attributes retrieved from
+                            the panelapp dump
+
+    Returns:
+        tuple: Tuple containing logging message and panel obj ready to be saved
+    """
+
+    msg = []
 
     if panel_obj.version != panel_data["version"]:
         msg.append((
@@ -83,7 +107,19 @@ def update_panel_attributes(panel_obj, panelapp_id, panel_data):
 
 
 def update_str_attributes(str_obj, str_name, str_data):
-    msg = [f"{str_name}"]
+    """ Return a logging msg, str obj ready to be saved
+
+    Args:
+        str_obj (Django model obj): str django object
+        str_name (str): Name of the str
+        str_data (dict): Dict containing the str attributes retrieved from
+                            the panelapp dump
+
+    Returns:
+        tuple: Tuple containing logging message and str obj ready to be saved
+    """
+
+    msg = []
 
     if str_obj.gene != str_data["gene"]:
         msg.append((
@@ -117,7 +153,19 @@ def update_str_attributes(str_obj, str_name, str_data):
 
 
 def update_cnv_attributes(cnv_obj, cnv_name, cnv_data):
-    msg = [f"{cnv_name}"]
+    """ Return a logging msg, cnv obj ready to be saved
+
+    Args:
+        cnv_obj (Django model obj): cnv django object
+        cnv_name (str): Name of the cnv
+        cnv_data (dict): Dict containing the cnv attributes retrieved from
+                            the panelapp dump
+
+    Returns:
+        tuple: Tuple containing logging message and cnv obj ready to be saved
+    """
+
+    msg = []
 
     if cnv_obj.variant_type != cnv_data["variant_type"]:
         msg.append((
@@ -166,17 +214,21 @@ def update_django_tables(data_dicts):
                 "signedoff": panel_data["signedoff"]
             }
             update_needed = check_attributes_for_obj(
-                panel_obj, **panel_attributes
+                panel_obj, panel_attributes
             )
 
             if update_needed is True:
                 # Panel to be updated
                 msg = f"Panelapp panel {panel_id} needs modification"
                 LOGGER.info(msg)
-                msg, panel_obj = update_panel_attributes(
+                messages, panel_obj = update_panel_attributes(
                     panel_obj, panel_id, panel_data
                 )
-                LOGGER.info(" | ".join(msg))
+                
+                if msg != []:
+                    for msg in messages:
+                        LOGGER.info(msg)
+
                 # panel_obj.save()
 
             # check if the panel is linked to the correct gene, str, cnv
@@ -189,6 +241,7 @@ def update_django_tables(data_dicts):
             ]
 
             diff = set(gene_symbols).symmetric_difference(panel_genes)
+
             if diff:
                 LOGGER.info(f"{panel_data['name']}: Genes linked are not identical")
                 LOGGER.debug(f"{gene_symbols}")
@@ -252,7 +305,7 @@ def update_django_tables(data_dicts):
                         "nb_pathogenic_repeats": str_data["nb_pathogenic_repeats"]
                     }
                     update_needed = check_attributes_for_obj(
-                        str_obj, **str_attributes
+                        str_obj, str_attributes
                     )
 
                     if update_needed is True:
@@ -281,7 +334,7 @@ def update_django_tables(data_dicts):
                     }
 
                     update_needed = check_attributes_for_obj(
-                        cnv_obj, **cnv_attributes
+                        cnv_obj, cnv_attributes
                     )
 
                     if update_needed is True:
