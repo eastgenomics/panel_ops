@@ -915,7 +915,11 @@ def generate_manifest(session, meta, gemini_dump):
     panel_gene_table = meta.tables["panel_gene"]
     gene_table = meta.tables["gene"]
 
-    uniq_used_panels = set(sample2gm_panels.values())
+    uniq_used_panels = set([
+        panel
+        for ele in sample2gm_panels.values()
+        for panel in ele
+    ])
 
     # get the gemini names and associated genes and panels ids
     test_queries = session.query(
@@ -990,11 +994,16 @@ def generate_manifest(session, meta, gemini_dump):
     # way
     output_data = set()
 
-    for sample, panel in sample2gm_panels.items():
-        # match gemini names from the dump to the genes in the db
-        if panel in gemini2genes:
-            for gene in gemini2genes[panel]:
-                output_data.add((sample, panel, "NA", gene))
+    for sample, panels in sample2gm_panels.items():
+        for panel in panels:
+            # match gemini names from the dump to the genes in the db
+            if panel in gemini2genes:
+                for gene in gemini2genes[panel]:
+                    output_data.add((sample, panel, "NA", gene))
+            else:
+                if panel.startswith("_"):
+                    gene = panel.strip("_")
+                    output_data.add((sample, f"_{gene}", "NA", gene))
 
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
