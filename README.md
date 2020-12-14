@@ -14,6 +14,10 @@ Python > 3.6
 
 Database called panel_database
 
+<p align="center">
+    <img height="100%" width="100%" src="panel_database_schema.png">
+</p>
+
 From https://github.com/PyMySQL/mysqlclient-python :
 >Linux  
 Note that this is a basic step. I can not support complete step for build for all environment. If you can see some error, you should fix it by yourself, or ask for support in some user forum. Don't file a issue on the issue tracker.  
