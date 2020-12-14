@@ -67,12 +67,11 @@ def check_attributes_for_obj(obj, attributes):
         return False
 
 
-def update_panel_attributes(panel_obj, panelapp_id, panel_data):
+def update_panel_attributes(panel_obj, panel_data):
     """ Return a logging msg, panel obj ready to be saved
 
     Args:
         panel_obj (Django model obj): Panel django object
-        panelapp_id (str): Panelapp id of the panel
         panel_data (dict): Dict containing the panel attributes retrieved from
                             the panelapp dump
 
@@ -106,12 +105,11 @@ def update_panel_attributes(panel_obj, panelapp_id, panel_data):
     return msg, panel_obj
 
 
-def update_str_attributes(str_obj, str_name, str_data):
+def update_str_attributes(str_obj, str_data):
     """ Return a logging msg, str obj ready to be saved
 
     Args:
         str_obj (Django model obj): str django object
-        str_name (str): Name of the str
         str_data (dict): Dict containing the str attributes retrieved from
                             the panelapp dump
 
@@ -152,12 +150,11 @@ def update_str_attributes(str_obj, str_name, str_data):
     return msg, str_obj
 
 
-def update_cnv_attributes(cnv_obj, cnv_name, cnv_data):
+def update_cnv_attributes(cnv_obj, cnv_data):
     """ Return a logging msg, cnv obj ready to be saved
 
     Args:
         cnv_obj (Django model obj): cnv django object
-        cnv_name (str): Name of the cnv
         cnv_data (dict): Dict containing the cnv attributes retrieved from
                             the panelapp dump
 
@@ -222,9 +219,9 @@ def update_django_tables(data_dicts):
                 msg = f"Panelapp panel {panel_id} needs modification"
                 LOGGER.info(msg)
                 messages, panel_obj = update_panel_attributes(
-                    panel_obj, panel_id, panel_data
+                    panel_obj, panel_data
                 )
-                
+
                 if msg != []:
                     for msg in messages:
                         LOGGER.info(msg)
@@ -243,7 +240,9 @@ def update_django_tables(data_dicts):
             diff = set(gene_symbols).symmetric_difference(panel_genes)
 
             if diff:
-                LOGGER.info(f"{panel_data['name']}: Genes linked are not identical")
+                LOGGER.info(
+                    f"{panel_data['name']}: Genes linked are not identical"
+                )
                 LOGGER.debug(f"{gene_symbols}")
                 LOGGER.debug(f"{panel_genes}")
 
@@ -313,7 +312,7 @@ def update_django_tables(data_dicts):
                         msg = f"Str {str_name} needs modification"
                         LOGGER.info(msg)
                         msg, str_obj = update_str_attributes(
-                            str_obj, str_name, str_data
+                            str_obj, str_data
                         )
                         LOGGER.info(" | ".join(msg))
                         # str_obj.save()
@@ -342,7 +341,7 @@ def update_django_tables(data_dicts):
                         msg = f"Cnv {cnv_name} needs modification"
                         LOGGER.info(msg)
                         msg, cnv_obj = update_cnv_attributes(
-                            cnv_obj, cnv_name, cnv_data
+                            cnv_obj, cnv_data
                         )
                         LOGGER.info(" | ".join(msg))
                         # cnv_obj.save()
