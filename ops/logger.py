@@ -69,23 +69,38 @@ def setup_logging(type_logger):
             },
         },
         "loggers": {
+            "normal_ops": {
+                "level": "INFO",
+                "handlers": ["console"]
+            },
             "generation": {
                 "level": "DEBUG",
-                "handlers": ["console", "generate_file"]
+                "handlers": ["generate_file"]
             },
             "check": {
                 "level": "DEBUG",
-                "handlers": ["console", "check_file"]
+                "handlers": ["check_file"]
             },
             "mod_db": {
                 "level": "DEBUG",
-                "handlers": ["console", "mod_db_file"]
+                "handlers": ["mod_db_file"]
             },
             "utils": {
                 "level": "DEBUG",
-                "handlers": ["console", "utils_file"]
+                "handlers": ["utils_file"]
             }
         }
     })
 
-    return logging.getLogger(type_logger)
+    return logging.getLogger("normal_ops"), logging.getLogger(type_logger)
+
+
+def output_to_loggers(msg: str, *loggers):
+    """ Add msgs to the all the loggers given
+
+    Args:
+        msg (str): Message to add for all the loggers given
+    """
+
+    for logger in loggers:
+        logger.info(msg)
