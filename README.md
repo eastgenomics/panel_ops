@@ -1,5 +1,3 @@
-# panel_ops
-Panel database related operations
 ## What does this do?
 
 Handles operations with the panel_database.
@@ -14,7 +12,7 @@ Checking database data, checking tests against Test directory, checking gene tra
 
 Python > 3.6
 
-Database called panel_database:
+Database called panel_database
 
 <p align="center">
     <img height="100%" width="100%" src="panel_database_schema.png">
@@ -34,21 +32,28 @@ Usage:
 ```python3
 source /panels/panel_env/bin/activate
 
-python main.py generate -all GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs all panelapp panels in folder ${day}_panelapp_dump
-python main.py generate -gms GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs gms panelapp panels in folder ${day}_panelapp_dump
+# output all panelapp panels in folder ${day}_panelapp_dump
+python main.py generate -all National_test_directory.xls
+# output gms panelapp panels in folder ${day}_panelapp_dump
+python main.py generate -gms National_test_directory.xls
 
-python main.py generate -j 201020_panelapp_dump GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
+# output django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
+python main.py generate -j 201020_panelapp_dump National_test_directory.xls 
 
-python main.py generate -g GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_genepanels.tsv
-python main.py generate -gd GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_gemini_names.txt
-python main.py generate -gp GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_genepanels.txt
-python main.py generate -m gemini_dump GRCh_37_nirvana.gff.gz National_test_directory.xls # outputs sql_dump/${day}_sample2genes.tsv
+# output sql_dump/${day}_genepanels.tsv
+python main.py generate -g National_test_directory.xls
+# output sql_dump/${day}_gemini_names.txt
+python main.py generate -gd National_test_directory.xls
+# output sql_dump/${day}_genepanels.txt
+python main.py generate -gp National_test_directory.xls
+# output sql_dump/${day}_sample2genes.tsv
+python main.py generate -m gemini_dump National_test_directory.xls
 
-python main.py check -g BRCA1 GRCh_37_nirvana.gff.gz National_test_directory.xls
-python main.py check -p 201020_panelapp_dump GRCh_37_nirvana.gff.gz National_test_directory.xls
-python main.py check -t GRCh_37_nirvana.gff.gz National_test_directory.xls
+# check db structure against panelapp dump
+python main.py check panelapp_dump 201020_panelapp_dump National_test_directory.xls
 
-python main.py mod_db -i django_fixtures/${day}/${day}_json_dump.json # imports the data in the database
+# import the data in the database
+python main.py mod_db -i django_fixtures/${day}/${day}_json_dump.json
 ```
 
 ## What does this output?
