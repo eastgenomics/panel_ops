@@ -1,5 +1,6 @@
 from collections import defaultdict, OrderedDict
 import datetime
+import gzip
 import os
 from pathlib import Path
 
@@ -10,9 +11,7 @@ from sqlalchemy.sql.schema import MetaData
 import xlrd
 
 from panelapp import queries
-from hgnc_queries import (
-    get_id as hq_get_id, get_symbol_from_id as hq_get_symbol
-)
+from hgnc_queries import get_id as hq_get_id
 
 from .hardcoded_tests import tests as hd_tests
 from .logger import setup_logging
@@ -31,21 +30,22 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
-def connect_to_db(user: str, passwd: str, host: str):
+def connect_to_db(user: str, passwd: str, host: str, database: str):
     """ Return cursor of panel_database
 
     Args:
         user (str): Username for the database
         passwd (str): Password for the user
         host (str): Host for the database
+        database (str): Name of the database to connect to
 
     Returns:
-        sqlalchemy cursor: Panel_database cursor
+        tuple: SQLAlchemy session obj, SQLAlchemy meta obj
     """
 
     try:
         db = create_engine(
-            f"mysql://{user}:{passwd}@{host}/panel_database"
+            f"mysql://{user}:{passwd}@{host}/{database}"
         )
     except Exception as e:
         UTILS.error(e)
@@ -140,6 +140,279 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
     return assigned_panel_type
 
 
+def get_nirvana_data_dict(
+    nirvana_gff: str, hgnc_data: dict, alias_data: dict, prev_data: dict
+):
+    """ Return dict of parsed data for Nirvana
+    Args:
+        nirvana_refseq (str): GFF file for nirvana
+        hgnc_data (dict): Dict of HGNC data
+        alias_data (dict): Dict of alias HGNC data
+        prev_data (dict): Dict of previous symbol HGNC data
+
+    Returns:
+        dict: Dict of gene2transcripts2exons
+    """
+
+    nirvana_tx_dict = defaultdict(
+        lambda: defaultdict(
+            lambda: defaultdict(
+                lambda: defaultdict(None)
+            )
+        )
+    )
+
+    symbol2ensg = {}
+
+    with gzip.open(nirvana_gff) as nir_fh:
+        for index, line in enumerate(nir_fh):
+            fields = line.decode("utf-8").strip().split("\t")
+            record_type = fields[2]
+            info_field = fields[8]
+            info_fields = info_field.split("; ")
+            info_dict = {}
+
+            # skip lines where the entity type is gene, UTR, CDS
+            if record_type in ["UTR", "CDS"]:
+                continue
+
+            for field in info_fields:
+                key, value = field.split(" ")
+                value = value.strip("\"").strip("\'")
+                info_dict[key] = value
+
+            gff_gene_name = info_dict["gene_name"]
+
+            if record_type == "gene":
+                if "ensembl_gene_id" in info_dict:
+                    ensg_id = info_dict["ensembl_gene_id"]
+                else:
+                    hgnc_id, ensg_id = assign_ids_to_symbol(
+                        gff_gene_name, hgnc_data, alias_data, prev_data
+                    )
+
+                symbol2ensg[gff_gene_name] = ensg_id
+
+                continue
+
+            gff_transcript = info_dict["transcript_id"]
+            ensg_id = symbol2ensg[gff_gene_name]
+
+            if record_type == "transcript":
+                if "tag" in info_dict:
+                    nirvana_tx_dict[ensg_id][gff_transcript]["canonical"] = True
+                else:
+                    nirvana_tx_dict[ensg_id][gff_transcript]["canonical"] = False
+
+    return nirvana_tx_dict
+
+
+def assign_transcript(
+    session, meta, hgnc_id: str, ensg_id: str, nirvana_dict: dict
+):
+    """ Return transcript data and clinical transcript from hgmd/nirvana
+
+    Args:
+        session (SQLAlchemy session): SQLAlchemy session obj
+        meta (SQLAlchemy meta): SQLAlchemy meta obj
+        hgnc_id (str): HGNC id
+        ensg_id (str): ENSG id
+        nirvana_dict (dict): Dict of parsed data from gff nirvana
+
+    Returns:
+        tuple: Dict of transcript data and clinical transcript refseq
+    """
+
+    markgene_tb = meta.tables["markname"]
+    gene2refseq_tb = meta.tables["gene2refseq"]
+
+    transcript_data = {}
+
+    # get the hgmd transcripts using the HGNC id provided
+    hgmd_transcripts = session.query(
+        gene2refseq_tb.c.refcore, gene2refseq_tb.c.refversion
+    ).join(
+        markgene_tb, markgene_tb.c.gene_id == gene2refseq_tb.c.hgmdID
+    ).filter(
+        markgene_tb.c.hgncID == hgnc_id[5:]
+    ).all()
+
+    # check if the gene is in nirvana
+    if ensg_id in nirvana_dict:
+        # get transcripts from the gff
+        nirvana_data = nirvana_dict[ensg_id]
+
+        for nirvana_tx in nirvana_data:
+            base_nirvana_tx, version = nirvana_tx.split(".")
+            transcript_data.setdefault(base_nirvana_tx, {})
+
+            # store all transcripts in the dict
+            transcript_data[base_nirvana_tx]["version"] = version
+            transcript_data[base_nirvana_tx]["clinical"] = False
+
+            # add the canonical status
+            if nirvana_data[nirvana_tx]["canonical"] is True:
+                transcript_data[base_nirvana_tx]["canonical"] = True
+            else:
+                transcript_data[base_nirvana_tx]["canonical"] = False
+
+            # if the gene is present in hgmd
+            if hgmd_transcripts:
+                for base_hgmd_tx, hgmx_tx_version in hgmd_transcripts:
+                    # check if one of the hgmd transcripts is equal to one of 
+                    # the nirvana transcripts
+                    if base_hgmd_tx == base_nirvana_tx:
+                        transcript_data[base_nirvana_tx]["clinical"] = True
+            else:
+                # if it's not present in hgmd the canonical transcript because
+                # the clinical transcript
+                if nirvana_data[nirvana_tx]["canonical"] is True:
+                    transcript_data[base_nirvana_tx]["clinical"] = True
+
+    return transcript_data
+
+
+def assign_ids_to_symbol(
+    gene_symbol: str, hgnc_data: dict, alias_data: dict, prev_data: dict
+):
+    """ Get the hgnc and ensg ids from a gene symbol
+
+    Args:
+        gene_symbol (str): Gene symbol
+        hgnc_data (dict): Dict of hgnc data
+        alias_data (dict): Dict of alias hgnc data
+        prev_data (dict): Dict of previous symbols hgnc data
+
+    Returns:
+        tuple: hgnc id and ensg id
+    """
+
+    hgnc_id = None
+    ensg_id = None
+
+    if gene_symbol in hgnc_data:
+        hgnc_id = hgnc_data[gene_symbol]["hgnc_id"]
+        ensg_id = hgnc_data[gene_symbol]["ensg_id"]
+    elif gene_symbol in alias_data:
+        hgnc_id = alias_data[gene_symbol]["hgnc_id"]
+        ensg_id = alias_data[gene_symbol]["ensg_id"]
+    elif gene_symbol in prev_data:
+        hgnc_id = prev_data[gene_symbol]["hgnc_id"]
+        ensg_id = prev_data[gene_symbol]["ensg_id"]
+
+    return hgnc_id, ensg_id
+
+
+def parse_hgnc_dump(hgnc_file: str):
+    """ Parse the hgnc dump and return a dict of the data in the dump
+
+    Args:
+        hgnc_file (str): Path to the hgnc file
+
+    Returns:
+        dict: Dict of hgnc data, symbol data, alias data, previous symbol data
+    """
+
+    data = {}
+    symbol_dict = {}
+    alias_dict = {}
+    prev_dict = {}
+
+    with open(hgnc_file) as f:
+        for i, line in enumerate(f):
+            # first line is headers
+            if i == 0:
+                reformatted_headers = []
+                headers = line.strip().split("\t")
+
+                for header in headers:
+                    # need transform the header name to the table attribute name
+                    if "supplied" in header:
+                        # external links provided always have: "(supplied by ...)"
+                        # split on the (, get the first element, strip it
+                        # (there's spaces sometimes), lower the characters and
+                        # replace spaces by underscores
+                        header = header.split("(")[0].strip().lower().replace(" ", "_")
+                        # they also need ext_ because they're external links
+                        header = f"ext_{header}"
+                    else:
+                        header = header.lower().replace(" ", "_")
+
+                    reformatted_headers.append(header)
+
+                # gather positions for the following headers
+                symbol_index = get_header_index(
+                    "approved_symbol", reformatted_headers
+                )
+                alias_index = get_header_index(
+                    "alias_symbols", reformatted_headers
+                )
+                prev_index = get_header_index(
+                    "previous_symbols", reformatted_headers
+                )
+                ensg_index = get_header_index(
+                    "ext_ensembl_id", reformatted_headers
+                )
+                hgnc_index = get_header_index(
+                    "hgnc_id", reformatted_headers
+                )
+
+            else:
+                line = line.strip("\n").split("\t")
+
+                for j, ele in enumerate(line):
+                    if j == 0:
+                        hgnc_id = ele
+                        data.setdefault(hgnc_id, {})
+                    else:
+                        # we have the index of the line so we can automatically
+                        # get the header and use it has a subkey in the dict
+                        data[hgnc_id][reformatted_headers[j]] = ele
+
+                # aliases and previous symbols are represented that way:
+                # "symbol|symbol..."
+                # so parse it
+                alias_symbols = line[alias_index].strip("\"").split("|")
+                prev_symbols = line[prev_index].strip("\"").split("|")
+
+                symbol_dict[line[symbol_index]] = {
+                    "hgnc_id": line[hgnc_index],
+                    "ensg_id": line[ensg_index]
+                }
+
+                for symbol in alias_symbols:
+                    alias_dict[symbol] = {
+                        "hgnc_id": line[hgnc_index],
+                        "ensg_id": line[ensg_index]
+                    }
+
+                for symbol in prev_symbols:
+                    prev_dict[symbol] = {
+                        "hgnc_id": line[hgnc_index],
+                        "ensg_id": line[ensg_index]
+                    }
+
+    return data, symbol_dict, alias_dict, prev_dict
+
+
+def get_header_index(header_name: str, headers: list):
+    """ Get the index of a given header
+
+    Args:
+        header_name (str): Header name
+        headers (list): List of headers
+
+    Returns:
+        int: Index for given header name
+    """
+
+    return [
+        i
+        for i, ele in enumerate(headers)
+        if ele == header_name
+    ][0]
+
+
 def create_panelapp_dict(
     dump_folders: list, type_panels: list, single_genes: list
 ):
@@ -213,17 +486,16 @@ def create_panelapp_dict(
 
     # make the single genes from the test directory single gene panels
     for hgnc_id in single_genes:
-        symbol = hq_get_symbol(hgnc_id[5:], verbose=False)
-
         single_gene_id = f"{hgnc_id}_SG"
-        panelapp_dict[single_gene_id]["name"] = symbol
-        panelapp_dict[single_gene_id]["version"] = None
+        panelapp_dict[single_gene_id]["name"] = f"{single_gene_id}_panel"
+        # default panel version because if single gene panels change well...
+        # they're not single gene panels anymore are they?
+        panelapp_dict[single_gene_id]["version"] = "1.0"
         panelapp_dict[single_gene_id]["signedoff"] = None
         panelapp_dict[single_gene_id]["type"] = "single_gene"
         panelapp_dict[single_gene_id]["genes"].add(hgnc_id)
 
         gene_dict[hgnc_id]["check"] = False
-        gene_dict[hgnc_id]["symbol"] = symbol
 
     return panelapp_dict, superpanel_dict, gene_dict
 
@@ -420,13 +692,12 @@ def get_django_json(model: str, pk: str, fields: dict):
     }
 
 
-def gather_ref_django_json(references, pk=1):
+def gather_ref_django_json(references: list, pk: int):
     """ Create the objects for the references
 
     Args:
         references (list): List of the hardcoded references
-        pk (int, optional): Primary key to start with for the references.
-                            Defaults to 1.
+        pk (int): Primary key to start with for the references.
 
     Returns:
         list: List of the json objects to be imported
@@ -435,7 +706,7 @@ def gather_ref_django_json(references, pk=1):
     reference_json = []
 
     # Create the list of reference table
-    for ref_id, ref in enumerate(references, pk):
+    for ref_id, ref in enumerate(references, pk+1):
         reference_json.append(
             get_django_json("Reference", ref_id, {"name": ref})
         )
@@ -443,13 +714,12 @@ def gather_ref_django_json(references, pk=1):
     return reference_json
 
 
-def gather_panel_types_django_json(panel_types, pk=1):
+def gather_panel_types_django_json(panel_types: list, pk: int):
     """ Create the objects for the panel types
 
     Args:
         panel_types (list): List of the hardcoded panel types
-        pk (int, optional): Primary key to start with for the panel types.
-                            Defaults to 1.
+        pk (int): Primary key to start with for the panel types.
 
     Returns:
         list: List of the json objects to be imported
@@ -457,7 +727,7 @@ def gather_panel_types_django_json(panel_types, pk=1):
 
     paneltype_json = []
 
-    for choice_id, choice in enumerate(panel_types, pk):
+    for choice_id, choice in enumerate(panel_types, pk+1):
         paneltype_json.append(
             get_django_json("PanelType", choice_id, {"type": choice})
         )
@@ -465,13 +735,12 @@ def gather_panel_types_django_json(panel_types, pk=1):
     return paneltype_json
 
 
-def gather_feature_types_django_json(feature_types, pk=1):
+def gather_feature_types_django_json(feature_types: list, pk: int):
     """ Create the objects for the feature types
 
     Args:
         feature_types (list): List of the hardcoded feature types
-        pk (int, optional): Primary key to start with for the feature types.
-                            Defaults to 1.
+        pk (int): Primary key to start with for the feature types.
 
     Returns:
         list: List of the json objects to be imported
@@ -479,7 +748,7 @@ def gather_feature_types_django_json(feature_types, pk=1):
 
     featuretype_json = []
 
-    for choice_id, choice in enumerate(feature_types, pk):
+    for choice_id, choice in enumerate(feature_types, pk+1):
         featuretype_json.append(
             get_django_json("FeatureType", choice_id, {"type": choice})
         )
@@ -514,6 +783,7 @@ def get_existing_object_pk(
 
     if object_to_return != [] and len(object_to_return) == 1:
         return object_to_return[0]
+
     elif object_to_return == []:
         msg = (
             f"Couldn't find object using field {field_to_query} and "
@@ -521,6 +791,7 @@ def get_existing_object_pk(
         )
         UTILS.error(msg)
         raise Exception(msg)
+
     elif len(object_to_return) >= 2:
         msg = (
             "Ambiguous search found more than 1 result using field "
@@ -528,6 +799,7 @@ def get_existing_object_pk(
         )
         UTILS.error(msg)
         raise Exception(msg)
+
     else:
         msg = (
             f"Querying {field_to_query} using {value} returns "
@@ -561,6 +833,7 @@ def get_links(list_existing_links: list, field_to_query: str, value: str):
 
     if objects_to_return != []:
         return objects_to_return
+
     elif objects_to_return == []:
         msg = (
             f"Couldn't find object using field {field_to_query} and "
@@ -568,6 +841,7 @@ def get_links(list_existing_links: list, field_to_query: str, value: str):
         )
         UTILS.error(msg)
         raise Exception(msg)
+
     else:
         msg = (
             f"Querying {field_to_query} using {value} returns "
@@ -579,7 +853,7 @@ def get_links(list_existing_links: list, field_to_query: str, value: str):
 
 def gather_panel_data_django_json(
     panelapp_dict: dict, gene_dict: dict, featuretype_json: list,
-    paneltype_json: list, reference_json: list, pk_dict: dict
+    paneltype_json: list, pk_dict: dict
 ):
     """ Create the panel object in json
 
@@ -588,7 +862,6 @@ def gather_panel_data_django_json(
         gene_dict (dict): Dict containing gene data
         featuretype_json (list): List of json with the feature type objects
         paneltype_json (list): List of json with the panel type objects
-        reference_json (list): List of json with the reference objects
         pk_dict (dict): Dict of primary keys
 
     Returns:
@@ -603,17 +876,14 @@ def gather_panel_data_django_json(
     gene_json = []
 
     # Create the list for panel, panel_gene, gene
-    for panel_pk, panelapp_id in enumerate(panelapp_dict, pk_dict["panel"]):
+    for panel_pk, panelapp_id in enumerate(panelapp_dict, pk_dict["panel"]+1):
         panel_dict = panelapp_dict[panelapp_id]
         # Get the primary key of the appropriate panel type
         panel_type_pk = get_existing_object_pk(
             paneltype_json, "type", panel_dict["type"]
         )
-        # Get the primary key of the appropriate reference
-        ref_pk = get_existing_object_pk(reference_json, "name", "GRCh37")
         panel_fields = {
                 "panelapp_id": panelapp_id, "name": panel_dict["name"],
-                "version": panel_dict["version"], "reference_id": ref_pk,
                 "panel_type_id": panel_type_pk
         }
 
@@ -636,8 +906,7 @@ def gather_panel_data_django_json(
                 gene_pk = pk_dict["gene"]
 
                 gene_fields = {
-                    "symbol": gene_data["symbol"],
-                    "hgnc_id": hgnc_id,
+                    "hgnc_id": hgnc_id
                 }
                 gene_json.append(get_django_json("Gene", gene_pk, gene_fields))
 
@@ -663,21 +932,11 @@ def gather_panel_data_django_json(
                     feature_json, "gene_id", int(gene_pk)
                 )
 
-            # # check if the link doesn't already exist i.e. superpanel that has
-            # # 2 subpanels with the same gene
-            # already_existing_panel2feature = [
-            #     obj
-            #     for obj in panelfeature_json
-            #     if obj["fields"]["panel_id"] == panel_pk and
-            #     obj["fields"]["feature_id"] == feature_pk
-            # ]
-
-            # if already_existing_panel2feature == []:
-                # Create panel_feature link
+            # Create panel_feature link
             pk_dict["panel_feature"] += 1
             panelfeature_json.append(
                 add_panel_feature(
-                    pk_dict["panel_feature"], panel_pk,
+                    pk_dict["panel_feature"], panel_pk, panel_dict["version"],
                     feature_pk
                 )
             )
@@ -687,14 +946,13 @@ def gather_panel_data_django_json(
     pk_dict["panel"] = panel_pk
 
     return (
-        panel_json, feature_json, panelfeature_json, featuretype_json,
-        gene_json, pk_dict
+        panel_json, feature_json, panelfeature_json, gene_json, pk_dict
     )
 
 
 def gather_superpanel_data_django_json(
     superpanel_dict: dict, panel_json: list, paneltype_json: list,
-    reference_json: list, panelfeature_json: list, pk_dict: dict
+    panelfeature_json: list, pk_dict: dict
 ):
     """ Add superpanels as panels in the panel_json list
 
@@ -702,7 +960,6 @@ def gather_superpanel_data_django_json(
         superpanel_dict (dict): Superpanel dict from panelapp data
         panel_json (list): List of json object for panel
         paneltype_json (list): List of json object for panel types
-        reference_json (list): List of json object for reference
         panelfeature_json (list): List of json object for panel features
         pk_dict (dict): Dict of primary keys
 
@@ -721,11 +978,8 @@ def gather_superpanel_data_django_json(
         panel_type_pk = get_existing_object_pk(
             paneltype_json, "type", superpanel_data["type"]
         )
-        # Get the primary key of the appropriate reference
-        ref_pk = get_existing_object_pk(reference_json, "name", "GRCh37")
         panel_fields = {
                 "panelapp_id": superpanel_id, "name": superpanel_data["name"],
-                "version": superpanel_data["version"], "reference_id": ref_pk,
                 "panel_type_id": panel_type_pk
         }
         panel_json.append(
@@ -760,7 +1014,10 @@ def gather_superpanel_data_django_json(
                     obj
                     for obj in panelfeature_json
                     if int(obj["fields"]["panel_id"]) == int(superpanel_pk) and
-                    int(obj["fields"]["feature_id"]) == int(feature_pk)
+                    int(obj["fields"]["feature_id"]) == int(feature_pk) and
+                    str(obj["fields"]["panel_version"]) == str(
+                        superpanel_data["version"]
+                    )
                 ]
 
                 # if that link doesn't exist need to create it
@@ -768,7 +1025,8 @@ def gather_superpanel_data_django_json(
                     pk_dict["panel_feature"] += 1
                     panelfeature_json.append(
                         add_panel_feature(
-                            pk_dict["panel_feature"], superpanel_pk, feature_pk
+                            pk_dict["panel_feature"], superpanel_pk,
+                            superpanel_data["version"], feature_pk
                         )
                     )
 
@@ -802,7 +1060,7 @@ def gather_clinical_indication_data_django_json(
 
     # go through the test codes
     for clin_ind_pk, test_code in enumerate(
-        clin_ind2targets, pk_dict["clinind"]
+        clin_ind2targets, pk_dict["clinind"]+1
     ):
         name = clin_ind2targets[test_code]["name"]
         gemini_name = clin_ind2targets[test_code]["gemini_name"]
@@ -900,6 +1158,80 @@ def gather_clinical_indication_data_django_json(
     return clinical_indication_json, clinical_indication2panels_json
 
 
+def gather_transcripts(
+    gene_json: list, reference_json: list, hgnc_data: dict,
+    nirvana_data: dict, pk_dict: dict
+):
+    """ Create the transcripts and the needed link tables
+
+    Args:
+        gene_json (list): List of json objects for panels
+        reference_json (list): List of json objects for panels
+        hgnc_data (dict): Dict of hgnc data
+        nirvana_data (dict): Dict of nirvana gff data
+        pk_dict (dict): Primary key dict
+
+    Returns:
+        tuple: List of json objects for transcripts and genes2transcripts
+    """
+
+    transcript_json = []
+    genes2transcripts_json = []
+
+    session, meta = connect_to_db(
+        "hgmd_ro", "hgmdreadonly", "localhost", "hgmd_2020_3"
+    )
+
+    gene_objs = [obj for obj in gene_json]
+
+    # loop through gene objs
+    for gene_obj in gene_objs:
+        hgnc_id = gene_obj["fields"]["hgnc_id"]
+        ensg_id = hgnc_data[hgnc_id]["ext_ensembl_id"]
+
+        # assign transcripts to the given gene
+        all_transcripts = assign_transcript(
+            session, meta, hgnc_id, ensg_id, nirvana_data
+        )
+
+        # loop through the transcripts
+        for transcript in all_transcripts:
+            pk_dict["transcript"] += 1
+            transcript_data = all_transcripts[transcript]
+
+            # create the transcript obj
+            transcript_json.append(
+                get_django_json(
+                    "Transcript", pk_dict["transcript"], {
+                        "refseq_base": transcript,
+                        "version": transcript_data["version"],
+                        "canonical": transcript_data["canonical"]
+                    }
+                )
+            )
+
+            gene_pk = gene_obj["pk"]
+            ref_pk = [
+                obj["pk"]
+                for obj in reference_json
+                if obj["fields"]["name"] == "GRCh37"
+            ][0]
+
+            pk_dict["g2t"] += 1
+            # create the g2t obj
+            genes2transcripts_json.append(
+                get_django_json(
+                    "Genes2transcripts", pk_dict["g2t"], {
+                        "gene_id": gene_pk, "reference_id": ref_pk,
+                        "transcript_id": pk_dict["transcript"],
+                        "clinical_transcript": transcript_data["clinical"]
+                    }
+                )
+            )
+
+    return transcript_json, genes2transcripts_json
+
+
 def add_feature(feature_pk: int, feature_type_pk: int, **links):
     """ Create feature object to add to the json list
 
@@ -923,7 +1255,7 @@ def add_feature(feature_pk: int, feature_type_pk: int, **links):
     return get_django_json("Feature", feature_pk, feature_fields)
 
 
-def add_panel_feature(pk: int, panel_pk: int, feature_pk: int):
+def add_panel_feature(pk: int, panel_pk: int, version, feature_pk: int):
     """ Return a panel feature object
 
     Args:
@@ -938,6 +1270,7 @@ def add_panel_feature(pk: int, panel_pk: int, feature_pk: int):
     return get_django_json(
         "PanelFeatures", pk,
         {
+            "panel_version": version,
             "panel_id": panel_pk,
             "feature_id": feature_pk
         }
