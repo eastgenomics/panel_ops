@@ -4,29 +4,39 @@ import regex
 from sqlalchemy import distinct
 
 from .logger import setup_logging, output_to_loggers
-from .utils import get_date
+from .utils import assign_transcript, get_date, connect_to_db
 
 
 CONSOLE, CHECK = setup_logging("check")
 
 
 def check_db(
-    folder: str, session, meta, panelapp_dict: dict, superpanel_dict: dict,
-    ci2targets: dict
+    files: dict, session, meta, panelapp_dict: dict, superpanel_dict: dict,
+    gene_dict: dict, nirvana_data: dict, hgnc_data: dict, ci2targets: dict
 ):
     """ Check that the data in the panelapp dump is the same as what's in the
     db
 
     Args:
-        folder (str): Folder in which panels are stored
-        session (SQLAlchemy session): Session object
-        meta (SQLAlchemy MetaData): Metadata object
-        panelapp_dict (dict): Dict of data from panelapp for panels
-        superpanel_dict (dict): Dict of data from panelapp for superpanel
-        ci2targets (dict): Dict of data from the test directory
+        files (dict): Dict of files for logging purposes
+        session (SQLAlchemy session obj): SQLAlchemy session obj
+        meta (SQLAlchemy meta obj): SQLAlchemy meta obj
+        panelapp_dict (dict): Dict of panelapp dump data for panel
+        superpanel_dict (dict): Dict of panelapp dump data for superpanel
+        gene_dict (dict): Dict of gene data from panelapp
+        nirvana_data (dict): Dict of nirvana transcript data
+        hgnc_data (dict): Dict of hgnc dump data
+        ci2targets (dict): Dict of clinical indication data from the national
+                            test directory
+
+    Raises:
+        Exception: If errors were detected during the checking
+
+    Returns:
+        bool: Check finishes
     """
 
-    msg = f"Checking database against {folder}"
+    msg = f"Checking database against {', '.join(files.values())}"
     output_to_loggers(msg, CONSOLE, CHECK)
 
     # setup the gathering of data from the following tables
@@ -38,6 +48,8 @@ def check_db(
     feature_tb = meta.tables["feature"]
     panel_features_tb = meta.tables["panel_features"]
     gene_tb = meta.tables["gene"]
+    g2t_tb = meta.tables["genes2transcripts"]
+    transcript_tb = meta.tables["transcript"]
 
     error_tracker = False
 
@@ -63,6 +75,15 @@ def check_db(
             error_tracker = True
             CHECK.error(error)
 
+    g2t_errors = check_g2t(
+        session, gene_dict, nirvana_data, hgnc_data, gene_tb, g2t_tb,
+        transcript_tb
+    )
+
+    for error in g2t_errors:
+        error_tracker = True
+        CHECK.error(error)
+
     # check if errors in the individual panels
     for panelapp_id, logged_data in panel_errors.items():
         for error_type, errors in logged_data.items():
@@ -80,8 +101,8 @@ def check_db(
         )
     else:
         msg = (
-            f"Checking against panelapp dump from {folder} against database "
-            f"on {get_date()}: correct"
+            f"Checking against panelapp dump from {', '.join(files.values())} "
+            f"against database on {get_date()}: correct"
         )
         output_to_loggers(msg, CONSOLE, CHECK)
 
@@ -247,9 +268,7 @@ def check_clinical_indications(
         ).all()
 
         # go through the clinical indication to panels links
-        for link in db_ci_link:
-            link_pk, ci_pk, panel_pk = link
-
+        for link_pk, ci_pk, panel_pk in db_ci_link:
             # get the panelapp id of the link
             panelapp_id = session.query(panel_tb.c.panelapp_id).filter(
                 panel_tb.c.id == panel_pk
@@ -279,7 +298,7 @@ def check_clinical_indications(
 
 
 def check_panels(
-    session, panelapp_dict, superpanel_dict, panel_type_tb,
+    session, panelapp_dict: dict, superpanel_dict: dict, panel_type_tb,
     panel_features_tb, panel_tb, feature_tb, gene_tb, feature_type_tb
 ):
     """ Check if the panel structure in the database is correct
@@ -321,9 +340,7 @@ def check_panels(
 
     # loop through stored panels
     for panel_row in db_panels:
-        (
-            panel_pk, panelapp_id, name, version, panel_type_pk, reference_pk
-        ) = panel_row
+        panel_pk, panelapp_id, name, panel_type_pk = panel_row
 
         # if not in panelapp dict or superpanel dict --> panel imported is not
         # in panelapp anymore
@@ -358,7 +375,7 @@ def check_panels(
             )
 
         # check if the attributes stored are correct
-        if name != panel_data["name"] or version != panel_data["version"]:
+        if name != panel_data["name"]:
             msg = (
                 f"Data associated with the panel {panelapp_id} is not "
                 "correct. Check the logs for more info"
@@ -366,9 +383,6 @@ def check_panels(
             panel_log[panelapp_id]["errors"].append(msg)
             panel_log[panelapp_id]["errors"].append(
                 f"{name} != {panel_data['name']}"
-            )
-            panel_log[panelapp_id]["errors"].append(
-                f"{version} != {panel_data['version']}"
             )
 
         # get the panel type
@@ -386,7 +400,7 @@ def check_panels(
 
         # get all the links to the feature table using the panel primary key
         db_panel2features = session.query(
-            panel_features_tb.c.feature_id
+            panel_features_tb.c.feature_id, panel_features_tb.c.panel_version
         ).filter(
             panel_features_tb.c.panel_id == panel_pk
         ).all()
@@ -394,7 +408,7 @@ def check_panels(
         # check the links
         feature_log = check_panel2features(
             session, db_panel2features, hgnc_ids, feature_tb, gene_tb,
-            feature_type_tb
+            feature_type_tb, panel_data["version"]
         )
 
         panel_log[panelapp_id]["feature_errors"] = feature_log
@@ -404,7 +418,7 @@ def check_panels(
 
 def check_panel2features(
     session, db_panel2features: list, hgnc_ids: list, feature_tb, gene_tb,
-    feature_type_tb
+    feature_type_tb, panel_version: str
 ):
     """ Check links from panels to features
 
@@ -416,6 +430,7 @@ def check_panel2features(
         feature_tb: SQL Alchemy queryable table for features
         gene_tb: SQL Alchemy queryable table for genes
         feature_type_tb: SQL Alchemy queryable table for feature types
+        panel_version (str): Panel version
 
     Returns:
         list: List of errors
@@ -431,10 +446,15 @@ def check_panel2features(
         )
         error_log.append(msg)
 
-    # I have the comma because db_panel2features is a list of tuples with one
-    # element in there --> cleaner than having to assign feature_pk to
-    # feature_pk[0]
-    for feature_pk, in db_panel2features:
+    for feature_pk, version in db_panel2features:
+        # compare the version from the database and the panel version
+        if float(version) != float(panel_version):
+            msg = (
+                f"Version of panel used for features are not equal: {version} "
+                f"(db) vs {panel_version} (dump)"
+            )
+            error_log.append(msg)
+
         # check if the feature is correct by querying the gene tb using the
         # feature pk
         feature_log_msg = check_feature(
@@ -522,3 +542,91 @@ def check_feature_type(
         )
 
     return msg
+
+
+def check_g2t(
+    session, gene_dict: dict, nirvana_data: dict, hgnc_data: dict, 
+    gene_tb, g2t_tb, transcript_tb
+):
+    """ Check the transcripts
+
+    Args:
+        session (SQLAlchemy session obj): SQLAlchemy session obj
+        gene_dict (dict): Dict of genes from panelapp
+        nirvana_data (dict): Dict of nirvana transcript data
+        hgnc_data (dict): Dict of data from hgnc dump
+        gene_tb: SQL Alchemy queryable table for genes
+        g2t_tb: SQL Alchemy queryable table for genes2transcripts
+        transcript_tb: SQL Alchemy queryable table for transcripts
+
+    Returns:
+        list: Error log for transcripts
+    """
+
+    error_log = []
+
+    # Connect to the local hgmd database
+    session_hgmd, meta_hgmd = connect_to_db(
+        "hgmd_ro", "hgmdreadonly", "localhost", "hgmd_2020_3"
+    )
+
+    for hgnc_id in gene_dict:
+        ensg_id = hgnc_data[hgnc_id]["ext_ensembl_id"]
+        # get the expected transcripts for the given gene
+        all_transcripts = assign_transcript(
+            session_hgmd, meta_hgmd, hgnc_id, ensg_id, nirvana_data
+        )
+
+        # get the genes2transcripts for the hgnc id
+        db_g2t = session.query(g2t_tb).join(gene_tb).filter(
+            gene_tb.c.hgnc_id == hgnc_id
+        ).all()
+
+        if len(db_g2t) != len(all_transcripts):
+            msg = (
+                f"{hgnc_id}: Number of transcripts linked to {hgnc_id} in the "
+                f"database ({len(db_g2t)}) not equal to the amount gathered "
+                f"in the nirvana gff ({len(all_transcripts)})"
+            )
+            error_log.append(msg)
+            tx_pks = [data[4] for data in db_g2t]
+            msg_pks = (
+                f"Primary keys of transcripts linked to {hgnc_id}: "
+                f"{', '.join(tx_pks)}"
+            )
+            msg_tx = (
+                "Transcripts gathered from the nirvana gff: "
+                f"{', '.join(list(all_transcripts.keys()))}"
+            )
+            error_log.append(msg_pks)
+            error_log.append(msg_tx)
+
+        # loop through the g2t
+        for pk, clinical_transcript, gene_pk, ref_pk, tx_pk in db_g2t:
+            # get the transcript data from the db
+            tx_id, refseq_base, version, canonical = session.query(
+                transcript_tb
+            ).filter(
+                transcript_tb.c.id == tx_pk
+            ).one()
+
+            # get the transcript data from the nirvana/hgmd dumps
+            tx_data = all_transcripts[refseq_base]
+
+            # check if the attributes are correct
+            if (
+                tx_data["clinical"] != clinical_transcript or
+                tx_data["canonical"] != canonical
+            ):
+                attribute_msg = (
+                    f"{hgnc_id}, {refseq_base}: Attributes are not equal in "
+                    "the database and the data gathered in the dump"
+                )
+                error_msg = (
+                    f"transcript: {tx_data['clinical']} (db) vs "
+                    f"{clinical_transcript} (assignment)"
+                )
+                error_log.append(attribute_msg)
+                error_log.append(error_msg)
+
+    return error_log
