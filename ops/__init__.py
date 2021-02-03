@@ -5,7 +5,7 @@ from .check import (
 from .mod_db import import_django_fixture
 from .generate import (
     generate_panelapp_dump, generate_genepanels, generate_gms_panels,
-    generate_django_jsons, generate_gemini_names, generate_manifest
+    generate_django_jsons, generate_g2t, generate_manifest
 )
 from .logger import setup_logging
 from .utils import (
