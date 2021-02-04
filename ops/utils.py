@@ -1255,13 +1255,18 @@ def add_feature(feature_pk: int, feature_type_pk: int, **links):
     return get_django_json("Feature", feature_pk, feature_fields)
 
 
-def add_panel_feature(pk: int, panel_pk: int, version, feature_pk: int):
+def add_panel_feature(
+    pk: int, panel_pk: int, version: str, feature_pk: int,
+    description: str = None
+):
     """ Return a panel feature object
 
     Args:
         pk (int): Primary key for the panel feature
         panel_pk (int): Primary key for the panel
+        version (str): Panel version to be recorded
         feature_pk (int): Primary key for the feature
+        description (str): Changes from old to new panel version
 
     Returns:
         dict: Dict describing the panel features object
@@ -1271,6 +1276,7 @@ def add_panel_feature(pk: int, panel_pk: int, version, feature_pk: int):
         "PanelFeatures", pk,
         {
             "panel_version": version,
+            "description": description,
             "panel_id": panel_pk,
             "feature_id": feature_pk
         }
