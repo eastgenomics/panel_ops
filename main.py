@@ -58,7 +58,7 @@ def main(**param):
             (
                 panelapp_dict, superpanel_dict, gene_dict
             ) = ops.utils.create_panelapp_dict(
-                files["panelapp"].split(";"), config_panel_db.panel_types,
+                files["panels"].split(";"), config_panel_db.panel_types,
                 single_genes
             )
             (
@@ -131,7 +131,7 @@ def main(**param):
 
             # Generate the jsons for the import
             ops.generate.generate_django_jsons(
-                files["dump"].split(";"), clean_clinind_data, hgnc_data,
+                files["panels"].split(";"), clean_clinind_data, hgnc_data,
                 nirvana_data, single_genes, config_panel_db.references,
                 config_panel_db.feature_types, config_panel_db.panel_types,
                 pk_dict
@@ -199,7 +199,7 @@ if __name__ == "__main__":
             "Generating the jsons files require 3 files: "
             "the panelapp dump(s)/custom dump(s) to actually import, "
             "hgnc file, nirvana gff file. They need to be given as "
-            "following: \"dump=file;file, hgnc=file, nirvana=file\". "
+            "following: \"panels=file;file, hgnc=file, nirvana=file\". "
             "The panelapp dump file path should contain the following string: "
             "gms, non-gms, in-house, single_gene. This allows to find the "
             "type of panel the folder contains."
@@ -220,7 +220,7 @@ if __name__ == "__main__":
         "dumps", metavar="KEY=VALUE", nargs=3,
         help=(
             "Provide panelapp dump, hgnc dump and nirvana gff. The format for "
-            "passing those arguments is: panelapp=folder hgnc=file "
+            "passing those arguments is: panels=folder hgnc=file "
             "nirvana=file."
         )
     )
