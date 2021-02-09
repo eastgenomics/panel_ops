@@ -140,13 +140,35 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
     return assigned_panel_type
 
 
+def parse_g2t(file):
+    """ Return dict genes2transcripts from genes2transcripts file
+
+    Args:
+        file (str): Path to genes2transcripts file
+
+    Returns:
+        dict: Dict of genes2transcripts
+    """
+
+    g2t = {}
+
+    with open(file) as f:
+        for line in f:
+            gene, transcript = line.strip().split()
+            g2t[gene] = transcript
+
+    return g2t
+
+
 def get_nirvana_data_dict(
-    nirvana_gff: str, hgnc_data: dict, alias_data: dict, prev_data: dict
+    nirvana_gff: str, hgnc_data: dict, symbol_data: dict, alias_data: dict,
+    prev_data: dict
 ):
     """ Return dict of parsed data for Nirvana
     Args:
         nirvana_refseq (str): GFF file for nirvana
         hgnc_data (dict): Dict of HGNC data
+        symbol_data (dict): Dict of main symbol HGNC data
         alias_data (dict): Dict of alias HGNC data
         prev_data (dict): Dict of previous symbol HGNC data
 
@@ -162,7 +184,7 @@ def get_nirvana_data_dict(
         )
     )
 
-    symbol2ensg = {}
+    symbol2hgnc = {}
 
     with gzip.open(nirvana_gff) as nir_fh:
         for index, line in enumerate(nir_fh):
@@ -184,92 +206,68 @@ def get_nirvana_data_dict(
             gff_gene_name = info_dict["gene_name"]
 
             if record_type == "gene":
+                # use HGNC for every thing
                 if "ensembl_gene_id" in info_dict:
-                    ensg_id = info_dict["ensembl_gene_id"]
-                else:
-                    hgnc_id, ensg_id = assign_ids_to_symbol(
-                        gff_gene_name, hgnc_data, alias_data, prev_data
+                    # use ENSG to find HGNC in the HGNC data dump
+                    hgnc_id = find_id_using_ensg(
+                        info_dict["ensembl_gene_id"], hgnc_data
                     )
 
-                symbol2ensg[gff_gene_name] = ensg_id
+                    # some hgnc ids don't have ENSGs or gff uses GRCh37 when
+                    # HGNC uses GRCh38
+                    if hgnc_id is None:
+                        hgnc_id, ensg_id = assign_ids_to_symbol(
+                            gff_gene_name, symbol_data, alias_data, prev_data
+                        )
+                else:
+                    hgnc_id, ensg_id = assign_ids_to_symbol(
+                        gff_gene_name, symbol_data, alias_data, prev_data
+                    )
+
+                # impossible to find the hgnc_id from ENSG + symbol --> 
+                # probably don't care (mitochondrial gene, LOC genes...)
+                if hgnc_id is None:
+                    continue
+                else:
+                    # add symbol2hgnc combo in dict
+                    symbol2hgnc[gff_gene_name] = hgnc_id
 
                 continue
 
             gff_transcript = info_dict["transcript_id"]
-            ensg_id = symbol2ensg[gff_gene_name]
+
+            # find the hgnc id using the gene symbol written on the line where
+            # transcripts are described
+            if gff_gene_name not in symbol2hgnc:
+                continue
+            else:
+                hgnc_id = symbol2hgnc[gff_gene_name]
 
             if record_type == "transcript":
                 if "tag" in info_dict:
-                    nirvana_tx_dict[ensg_id][gff_transcript]["canonical"] = True
+                    nirvana_tx_dict[hgnc_id][gff_transcript]["canonical"] = True
                 else:
-                    nirvana_tx_dict[ensg_id][gff_transcript]["canonical"] = False
+                    nirvana_tx_dict[hgnc_id][gff_transcript]["canonical"] = False
 
     return nirvana_tx_dict
 
 
-def assign_transcript(
-    session, meta, hgnc_id: str, ensg_id: str, nirvana_dict: dict
-):
-    """ Return transcript data and clinical transcript from hgmd/nirvana
+def find_id_using_ensg(ensg_id: str, hgnc_data: dict):
+    """ Find HGNC id using the ENSG id
 
     Args:
-        session (SQLAlchemy session): SQLAlchemy session obj
-        meta (SQLAlchemy meta): SQLAlchemy meta obj
-        hgnc_id (str): HGNC id
         ensg_id (str): ENSG id
-        nirvana_dict (dict): Dict of parsed data from gff nirvana
+        hgnc_data (dict): Dict of HGNC data from HGNC dump
 
     Returns:
-        tuple: Dict of transcript data and clinical transcript refseq
+        str: HGNC id
     """
 
-    markgene_tb = meta.tables["markname"]
-    gene2refseq_tb = meta.tables["gene2refseq"]
+    for hgnc_id in hgnc_data:
+        if ensg_id == hgnc_data[hgnc_id]["ext_ensembl_id"]:
+            return hgnc_id
 
-    transcript_data = {}
-
-    # get the hgmd transcripts using the HGNC id provided
-    hgmd_transcripts = session.query(
-        gene2refseq_tb.c.refcore, gene2refseq_tb.c.refversion
-    ).join(
-        markgene_tb, markgene_tb.c.gene_id == gene2refseq_tb.c.hgmdID
-    ).filter(
-        markgene_tb.c.hgncID == hgnc_id[5:]
-    ).all()
-
-    # check if the gene is in nirvana
-    if ensg_id in nirvana_dict:
-        # get transcripts from the gff
-        nirvana_data = nirvana_dict[ensg_id]
-
-        for nirvana_tx in nirvana_data:
-            base_nirvana_tx, version = nirvana_tx.split(".")
-            transcript_data.setdefault(base_nirvana_tx, {})
-
-            # store all transcripts in the dict
-            transcript_data[base_nirvana_tx]["version"] = version
-            transcript_data[base_nirvana_tx]["clinical"] = False
-
-            # add the canonical status
-            if nirvana_data[nirvana_tx]["canonical"] is True:
-                transcript_data[base_nirvana_tx]["canonical"] = True
-            else:
-                transcript_data[base_nirvana_tx]["canonical"] = False
-
-            # if the gene is present in hgmd
-            if hgmd_transcripts:
-                for base_hgmd_tx, hgmx_tx_version in hgmd_transcripts:
-                    # check if one of the hgmd transcripts is equal to one of 
-                    # the nirvana transcripts
-                    if base_hgmd_tx == base_nirvana_tx:
-                        transcript_data[base_nirvana_tx]["clinical"] = True
-            else:
-                # if it's not present in hgmd the canonical transcript because
-                # the clinical transcript
-                if nirvana_data[nirvana_tx]["canonical"] is True:
-                    transcript_data[base_nirvana_tx]["clinical"] = True
-
-    return transcript_data
+    return
 
 
 def assign_ids_to_symbol(
@@ -1159,16 +1157,16 @@ def gather_clinical_indication_data_django_json(
 
 
 def gather_transcripts(
-    gene_json: list, reference_json: list, hgnc_data: dict,
-    nirvana_data: dict, pk_dict: dict
+    gene_json: list, reference_json: list, nirvana_data: dict, g2t_data: dict,
+    pk_dict: dict
 ):
     """ Create the transcripts and the needed link tables
 
     Args:
         gene_json (list): List of json objects for panels
         reference_json (list): List of json objects for panels
-        hgnc_data (dict): Dict of hgnc data
         nirvana_data (dict): Dict of nirvana gff data
+        g2t_data (dict): Dict of g2t data
         pk_dict (dict): Primary key dict
 
     Returns:
@@ -1178,33 +1176,28 @@ def gather_transcripts(
     transcript_json = []
     genes2transcripts_json = []
 
-    session, meta = connect_to_db(
-        "hgmd_ro", "hgmdreadonly", "localhost", "hgmd_2020_3"
-    )
+    date = str(datetime.date.today())
 
     gene_objs = [obj for obj in gene_json]
 
     # loop through gene objs
     for gene_obj in gene_objs:
         hgnc_id = gene_obj["fields"]["hgnc_id"]
-        ensg_id = hgnc_data[hgnc_id]["ext_ensembl_id"]
-
-        # assign transcripts to the given gene
-        all_transcripts = assign_transcript(
-            session, meta, hgnc_id, ensg_id, nirvana_data
-        )
+        # get all available transcripts from nirvana
+        all_transcripts = nirvana_data[hgnc_id]
 
         # loop through the transcripts
         for transcript in all_transcripts:
             pk_dict["transcript"] += 1
+            refseq_base, refseq_version = transcript.split(".")
             transcript_data = all_transcripts[transcript]
 
             # create the transcript obj
             transcript_json.append(
                 get_django_json(
                     "Transcript", pk_dict["transcript"], {
-                        "refseq_base": transcript,
-                        "version": transcript_data["version"],
+                        "refseq_base": refseq_base,
+                        "version": refseq_version,
                         "canonical": transcript_data["canonical"]
                     }
                 )
@@ -1217,6 +1210,12 @@ def gather_transcripts(
                 if obj["fields"]["name"] == "GRCh37"
             ][0]
 
+            # use g2t data to check if current transcript is clinical
+            if transcript == g2t_data[hgnc_id]:
+                clinical = True
+            else:
+                clinical = False
+
             pk_dict["g2t"] += 1
             # create the g2t obj
             genes2transcripts_json.append(
@@ -1224,7 +1223,7 @@ def gather_transcripts(
                     "Genes2transcripts", pk_dict["g2t"], {
                         "gene_id": gene_pk, "reference_id": ref_pk,
                         "transcript_id": pk_dict["transcript"],
-                        "clinical_transcript": transcript_data["clinical"]
+                        "date": date, "clinical_transcript": clinical
                     }
                 )
             )
