@@ -3,8 +3,7 @@
 """ Panel operations
 
 3 subparsers:
-- check:
-    - panel: Check the panelapp dump folder given against the database
+- check: Check the panelapp dump folder given against the database
 - generate:
     - panelapp_gms: Generate panelapp dump using only GMS panels
     - panelapp_all: Generate panelapp dump using only all panels
@@ -12,7 +11,6 @@
     - json: Generate django fixture using panelapp dump folder
     - genepanels: Generate genepanels file
     - manifest: Generate manifest type file for reports using Gemini db dump
-    - g2t: Generate genes2transcript file
 - mod_db:
     - initial_import: Import given django fixture in the database
     - hgnc: Import HGNC data dump in the database
@@ -38,7 +36,8 @@ def main(**param):
         clinind_data = ops.utils.parse_test_directory(param["test_xls"])
         clean_clinind_data = ops.utils.clean_targets(clinind_data)
 
-        # get the single genes in the test directory
+        # get the single genes in the test directory to transform them into
+        # single gene panels
         single_genes = ops.utils.gather_single_genes(clean_clinind_data)
 
     if param["command"] == "check":
@@ -55,18 +54,22 @@ def main(**param):
             session, meta = ops.utils.connect_to_db(
                 user, passwd, host, "panel_database"
             )
+            # gather data from panels
             (
                 panelapp_dict, superpanel_dict, gene_dict
             ) = ops.utils.create_panelapp_dict(
                 files["panels"].split(","), config_panel_db.panel_types,
                 single_genes
             )
+            # parse hgnc dump data for transcript purposes
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+            # get all the transcripts from the nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
             )
+            # check the database data
             check = ops.check.check_db(
                 files, session, meta, panelapp_dict, superpanel_dict,
                 gene_dict, nirvana_data, clean_clinind_data
@@ -117,14 +120,18 @@ def main(**param):
             pk_dict = {
                 # they start at 1 because I loop over those elements
                 # makes it easier to keep track off
+                # + might that in the update process later (i.e. get last ele
+                # in a table and put it in the pk_dict)
                 "clinind": 0, "panel": 0, "reference": 0, "feature_type": 0,
                 "clinind_panels": 0, "feature": 0, "panel_feature": 0,
                 "gene": 0, "panel_type": 0, "transcript": 0, "g2t": 0
             }
 
+            # parse data from hgnc for transcript purposes
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+            # get all transcripts in nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
             )
@@ -145,6 +152,7 @@ def main(**param):
             ops.generate.generate_genepanels(session, meta)
 
     elif param["command"] == "mod_db":
+        # check if the credentials for panel admin are correct
         if (
             param["user"] == config_panel_db.user_admin and
             param["passwd"] == config_panel_db.passwd_admin
