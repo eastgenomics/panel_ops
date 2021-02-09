@@ -4,11 +4,11 @@ from pathlib import Path
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, parse_g2t, parse_gemini_dump, create_panelapp_dict,
-    gather_ref_django_json, gather_panel_types_django_json,
-    gather_feature_types_django_json, gather_panel_data_django_json,
-    gather_superpanel_data_django_json, gather_transcripts,
-    gather_clinical_indication_data_django_json
+    get_date, get_new_output_folder, parse_g2t, parse_gemini_dump,
+    create_panelapp_dict, gather_ref_django_json,
+    gather_panel_types_django_json, gather_feature_types_django_json,
+    gather_panel_data_django_json, gather_superpanel_data_django_json,
+    gather_transcripts, gather_clinical_indication_data_django_json
 )
 
 
@@ -31,15 +31,7 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
 
     # name of the main folder
     output_dump = f"{type_panel}_panelapp_dump"
-    output_date = f"{get_date()}"
-    output_index = 1
-    # full path to the folders to be created
-    output_folder = f"{output_dump}/{output_date}-{output_index}"
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"{output_dump}/{output_date}-{output_index}"
+    output_folder = get_new_output_folder(output_dump)
 
     # create the folders
     Path(output_folder).mkdir(parents=True)
@@ -96,7 +88,6 @@ def generate_genepanels(session, meta):
     # query database to get all panels
     for panel_row in session.query(panel_tb):
         panel_id, panelapp_id, name, panel_type = panel_row
-
         panels[panel_id] = name
 
     # query database to get all genes
@@ -106,7 +97,7 @@ def generate_genepanels(session, meta):
         genes[feature_id] = hgnc_id
 
     # query database to get all panel2genes links
-    for pk, panel_version, feature_id, panel_id in session.query(
+    for pk, panel_version, description, feature_id, panel_id in session.query(
         panel2features_tb
     ):
         gene_panels[panel_id][panel_version].append(feature_id)
@@ -130,16 +121,8 @@ def generate_genepanels(session, meta):
     # sort the data using panel names and genes
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[2]))
 
-    output_index = 1
-    output_folder = f"sql_dump/{get_date()}-{output_index}_genepanels"
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"sql_dump/{get_date()}-{output_index}_genepanels"
-
+    output_folder = get_new_output_folder("sql_dump", "genepanels")
     Path(output_folder).mkdir(parents=True)
-
     output_file = f"{output_folder}/{get_date()}_genepanels.tsv"
 
     with open(output_file, "w") as f:
@@ -151,45 +134,6 @@ def generate_genepanels(session, meta):
     output_to_loggers(msg, CONSOLE, GENERATION)
 
     return output_file
-
-
-def generate_gms_panels(gms_panels: dict, confidence_level: int = 3):
-    """ Generate gene files for GMS panels
-
-    Args:
-        gms_panels (dict): Dict of gms panels
-        confidence_level (int, optional): Confidence level of genes to get. Defaults to 3.
-
-    Returns:
-        str: Output folder path
-    """
-
-    msg = "Creating gms panels"
-    output_to_loggers(msg, CONSOLE, GENERATION)
-
-    output_index = 1
-    output_folder = f"sql_dump/{get_date()}-{output_index}_gms_panels"
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"sql_dump/{get_date()}-{output_index}_gms_panels"
-
-    Path(output_folder).mkdir(parents=True)
-
-    for panel_id, panel in gms_panels.items():
-        panel_file = f"{panel.get_name()}_{panel.get_version()}"
-
-        output_file = f"{output_folder}/{panel_file}"
-
-        with open(output_file, "w") as f:
-            for gene, hgnc_id in panel.get_genes(confidence_level):
-                f.write(f"{gene}\t{hgnc_id}\n")
-
-    msg = f"Created gms panels: {output_folder}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
-
-    return output_folder
 
 
 def generate_django_jsons(
@@ -215,7 +159,7 @@ def generate_django_jsons(
         str: Output file path
     """
 
-    msg = "Gathering data from panelapp dump and co"
+    msg = "Gathering data from panel dumps"
     output_to_loggers(msg, CONSOLE, GENERATION)
 
     (
@@ -285,16 +229,8 @@ def generate_django_jsons(
         for ele in data:
             all_elements.append(ele)
 
-    output_index = 1
-    output_folder = f"django_fixtures/{get_date()}-{output_index}"
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"django_fixtures/{get_date()}-{output_index}"
-
+    output_folder = get_new_output_folder("django_fixtures")
     Path(output_folder).mkdir(parents=True)
-
     output_file = f"{output_folder}/{today}_json_dump.json"
 
     # write the single json containing all the elements in the database
@@ -391,16 +327,8 @@ def generate_manifest(session, meta, gemini_dump: str):
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
 
-    output_index = 1
-    output_folder = f"sql_dump/{get_date()}-{output_index}_bio_manifest"
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"sql_dump/{get_date()}-{output_index}_bio_manifest"
-
+    output_folder = get_new_output_folder("sql_dump", "bio_manifest")
     Path(output_folder).mkdir(parents=True)
-
     output_file = f"{output_folder}/{get_date()}_bio_manifest.tsv"
 
     with open(output_file, "w") as f:
