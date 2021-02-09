@@ -4,10 +4,11 @@ from pathlib import Path
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, parse_gemini_dump, create_panelapp_dict, gather_ref_django_json,
-    gather_panel_types_django_json, gather_feature_types_django_json,
-    gather_panel_data_django_json, gather_superpanel_data_django_json,
-    gather_transcripts, gather_clinical_indication_data_django_json
+    get_date, parse_g2t, parse_gemini_dump, create_panelapp_dict,
+    gather_ref_django_json, gather_panel_types_django_json,
+    gather_feature_types_django_json, gather_panel_data_django_json,
+    gather_superpanel_data_django_json, gather_transcripts,
+    gather_clinical_indication_data_django_json
 )
 
 
@@ -192,7 +193,7 @@ def generate_gms_panels(gms_panels: dict, confidence_level: int = 3):
 
 
 def generate_django_jsons(
-    panel_dumps: list, clean_clinind_data: dict, hgnc_data: dict,
+    panel_dumps: list, clean_clinind_data: dict, g2t_file: str,
     nirvana_data: dict, single_genes: list, references: list,
     feature_types: list, panel_types: list, pk_dict: dict
 ):
@@ -202,7 +203,7 @@ def generate_django_jsons(
     Args:
         panel_dumps (list): List of files to create panel dumps for
         clean_clinind_data (dict): Data gathered from the national test directory
-        hgnc_data (dict): Data gathered from hgnc dump
+        g2t_file (dict): Data gathered from g2t dump
         nirvana_data (dict): Data gathered from nirvana gff
         single_genes (list): List of single genes associated with clinical indications
         references (list): Hardcoded list of references to consider, defined in config_panel_db.py
@@ -248,8 +249,12 @@ def generate_django_jsons(
         superpanel_dict, panel_json, paneltype_json, panelfeature_json, pk_dict
     )
 
+    # Parse genes2transcripts file
+    g2t_data = parse_g2t(g2t_file)
+
+    # Create the list for data associated with transcripts
     transcript_json, g2t_json = gather_transcripts(
-        gene_json, reference_json, hgnc_data, nirvana_data, pk_dict
+        gene_json, reference_json, nirvana_data, g2t_data, pk_dict
     )
 
     # Create the list of clinical indication
@@ -407,59 +412,3 @@ def generate_manifest(session, meta, gemini_dump: str):
     output_to_loggers(msg, CONSOLE, GENERATION)
 
     return output_file
-
-
-def generate_g2t(session, meta):
-    """ Generate genes2transcripts
-
-    Args:
-        session (SQLAlchemy session): SQLAlchemy session obj
-        meta (SQLAlchemy meta): SQLAlchemy meta obj
-    """
-
-    msg = f"Creating genes2transcripts"
-    output_to_loggers(msg, CONSOLE, GENERATION)
-
-    gene_tb = meta.tables["gene"]
-    g2t_tb = meta.tables["genes2transcripts"]
-    transcript_tb = meta.tables["transcript"]
-
-    data = []
-
-    # loop through all genes in database
-    for gene_pk, hgnc_id in session.query(gene_tb):
-        # get the clinical transcript of the current gene
-        transcript_data = session.query(
-            transcript_tb.c.refseq_base, transcript_tb.c.version
-        ).outerjoin(g2t_tb).filter(
-            g2t_tb.c.clinical_transcript == 1
-        ).filter(g2t_tb.c.gene_id == gene_pk).one_or_none()
-
-        if transcript_data is not None:
-            refseq_base, version = transcript_data
-            data.append((hgnc_id, f"{refseq_base}.{version}"))
-
-    sorted_data = sorted(data, key=lambda x: (x[0]))
-
-    output_dump = "sql_dump"
-    output_date = get_date()
-    output_index = 1
-    output_folder = (
-        f"{output_dump}/{output_date}-{output_index}_genes2transcripts"
-    )
-
-    # don't want to overwrite files so create folders using the output index
-    while Path(output_folder).is_dir():
-        output_index += 1
-        output_folder = f"{output_dump}/{output_date}-{output_index}"
-
-    Path(output_folder).mkdir(parents=True)
-
-    output_file = f"{output_folder}/{output_date}_genes2transcripts.tsv"
-
-    with open(output_file, "w") as f:
-        for hgnc_id, clinical_transcript in sorted_data:
-            f.write(f"{hgnc_id}\t{clinical_transcript}\n")
-
-    msg = f"Created sample2panels file: {output_file}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
