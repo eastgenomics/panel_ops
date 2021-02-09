@@ -4,7 +4,7 @@ import regex
 from sqlalchemy import distinct
 
 from .logger import setup_logging, output_to_loggers
-from .utils import assign_transcript, get_date, connect_to_db
+from .utils import get_date, parse_g2t
 
 
 CONSOLE, CHECK = setup_logging("check")
@@ -12,7 +12,7 @@ CONSOLE, CHECK = setup_logging("check")
 
 def check_db(
     files: dict, session, meta, panelapp_dict: dict, superpanel_dict: dict,
-    gene_dict: dict, nirvana_data: dict, hgnc_data: dict, ci2targets: dict
+    gene_dict: dict, nirvana_data: dict, ci2targets: dict
 ):
     """ Check that the data in the panelapp dump is the same as what's in the
     db
@@ -25,7 +25,6 @@ def check_db(
         superpanel_dict (dict): Dict of panelapp dump data for superpanel
         gene_dict (dict): Dict of gene data from panelapp
         nirvana_data (dict): Dict of nirvana transcript data
-        hgnc_data (dict): Dict of hgnc dump data
         ci2targets (dict): Dict of clinical indication data from the national
                             test directory
 
@@ -75,8 +74,10 @@ def check_db(
             error_tracker = True
             CHECK.error(error)
 
+    g2t_data = parse_g2t(files["g2t"])
+
     g2t_errors = check_g2t(
-        session, gene_dict, nirvana_data, hgnc_data, gene_tb, g2t_tb,
+        session, gene_dict, nirvana_data, g2t_data, gene_tb, g2t_tb,
         transcript_tb
     )
 
@@ -545,8 +546,8 @@ def check_feature_type(
 
 
 def check_g2t(
-    session, gene_dict: dict, nirvana_data: dict, hgnc_data: dict, 
-    gene_tb, g2t_tb, transcript_tb
+    session, gene_dict: dict, nirvana_data: dict, g2t_data: dict, gene_tb,
+    g2t_tb, transcript_tb
 ):
     """ Check the transcripts
 
@@ -554,7 +555,7 @@ def check_g2t(
         session (SQLAlchemy session obj): SQLAlchemy session obj
         gene_dict (dict): Dict of genes from panelapp
         nirvana_data (dict): Dict of nirvana transcript data
-        hgnc_data (dict): Dict of data from hgnc dump
+        g2t_data (dict): Dict of g2t data from g2t file
         gene_tb: SQL Alchemy queryable table for genes
         g2t_tb: SQL Alchemy queryable table for genes2transcripts
         transcript_tb: SQL Alchemy queryable table for transcripts
@@ -565,17 +566,8 @@ def check_g2t(
 
     error_log = []
 
-    # Connect to the local hgmd database
-    session_hgmd, meta_hgmd = connect_to_db(
-        "hgmd_ro", "hgmdreadonly", "localhost", "hgmd_2020_3"
-    )
-
     for hgnc_id in gene_dict:
-        ensg_id = hgnc_data[hgnc_id]["ext_ensembl_id"]
-        # get the expected transcripts for the given gene
-        all_transcripts = assign_transcript(
-            session_hgmd, meta_hgmd, hgnc_id, ensg_id, nirvana_data
-        )
+        all_transcripts = nirvana_data[hgnc_id]
 
         # get the genes2transcripts for the hgnc id
         db_g2t = session.query(g2t_tb).join(gene_tb).filter(
@@ -602,7 +594,7 @@ def check_g2t(
             error_log.append(msg_tx)
 
         # loop through the g2t
-        for pk, clinical_transcript, gene_pk, ref_pk, tx_pk in db_g2t:
+        for pk, db_clinical_transcript, date, gene_pk, ref_pk, tx_pk in db_g2t:
             # get the transcript data from the db
             tx_id, refseq_base, version, canonical = session.query(
                 transcript_tb
@@ -611,22 +603,33 @@ def check_g2t(
             ).one()
 
             # get the transcript data from the nirvana/hgmd dumps
-            tx_data = all_transcripts[refseq_base]
+            tx_data = all_transcripts[f"{refseq_base}.{version}"]
+
+            if canonical == 0:
+                canonical = False
+            elif canonical == 1:
+                canonical = True
+            else:
+                canonical = None
+
+            if db_clinical_transcript:
+                clinical_transcript = g2t_data[hgnc_id]
+
+                if f"{refseq_base}.{version}" != clinical_transcript:
+                    msg = (
+                        f"{hgnc_id}, {refseq_base}.{version}: Clinical "
+                        f"transcript gathered is {clinical_transcript} vs db "
+                        f"is {refseq_base}.{version}"
+                    )
+                    error_log.append(msg)
 
             # check if the attributes are correct
-            if (
-                tx_data["clinical"] != clinical_transcript or
-                tx_data["canonical"] != canonical
-            ):
-                attribute_msg = (
-                    f"{hgnc_id}, {refseq_base}: Attributes are not equal in "
-                    "the database and the data gathered in the dump"
+            if tx_data["canonical"] != canonical:
+                msg = (
+                    f"{hgnc_id}, {refseq_base}.{version}: Canonical status "
+                    f"between db ({tx_data['canonical']}) and dump "
+                    f"({canonical}) are not equal"
                 )
-                error_msg = (
-                    f"transcript: {tx_data['clinical']} (db) vs "
-                    f"{clinical_transcript} (assignment)"
-                )
-                error_log.append(attribute_msg)
-                error_log.append(error_msg)
+                error_log.append(msg)
 
     return error_log
