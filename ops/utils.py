@@ -30,6 +30,36 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
+def get_new_output_folder(output_dump: str, output_suffix: str = ""):
+    """ Return new folder to output files in
+
+    Args:
+        output_dump (str): Type of output folder
+        output_suffix (str, optional): Suffix to be added to subfolder. Defaults to "".
+
+    Returns:
+        str: Folder path to the final output
+    """
+
+    output_date = get_date()
+    output_index = 1
+
+    output_folder = f"{output_dump}/{output_date}-{output_index}"
+
+    if output_suffix:
+        output_folder = f"{output_folder}_{output_suffix}"
+
+    # don't want to overwrite files so create folders using the output index
+    while Path(output_folder).is_dir():
+        output_index += 1
+        output_folder = f"{output_dump}/{output_date}-{output_index}"
+
+        if output_suffix:
+            output_folder = f"{output_folder}_{output_suffix}"
+
+    return output_folder
+
+
 def connect_to_db(user: str, passwd: str, host: str, database: str):
     """ Return cursor of panel_database
 
