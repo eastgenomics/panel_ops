@@ -228,7 +228,7 @@ if __name__ == "__main__":
 
     mod_db.add_argument(
         "-i", "--initial_import",
-        help="Import pointed json in the database"
+        help="Import given json in the database"
     )
     mod_db.add_argument(
         "-hgnc", "--hgnc", metavar="KEY=VALUE", nargs=4,
