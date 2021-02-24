@@ -115,10 +115,10 @@ def get_GMS_panels():
 
 
 def get_non_GMS_panels():
-    """ Return dict of panelapp_id to panel object
+    """ Return dict of non-GMS panels panelapp_ids to panel object
 
     Returns:
-        dict: Dict of all panels in panelapp
+        dict: Dict of non-GMS panels in panelapp
     """
 
     signedoff_panels = queries.get_all_signedoff_panels()
@@ -203,7 +203,7 @@ def get_nirvana_data_dict(
         prev_data (dict): Dict of previous symbol HGNC data
 
     Returns:
-        dict: Dict of gene2transcripts2exons
+        dict: Dict of gene2transcripts
     """
 
     nirvana_tx_dict = defaultdict(
@@ -224,7 +224,7 @@ def get_nirvana_data_dict(
             info_fields = info_field.split("; ")
             info_dict = {}
 
-            # skip lines where the entity type is gene, UTR, CDS
+            # skip lines where the entity type is UTR, CDS
             if record_type in ["UTR", "CDS"]:
                 continue
 
@@ -394,7 +394,7 @@ def parse_hgnc_dump(hgnc_file: str):
                         data.setdefault(hgnc_id, {})
                     else:
                         # we have the index of the line so we can automatically
-                        # get the header and use it has a subkey in the dict
+                        # get the header and use it as a subkey in the dict
                         data[hgnc_id][reformatted_headers[j]] = ele
 
                 # aliases and previous symbols are represented that way:
@@ -448,7 +448,7 @@ def create_panelapp_dict(
 
     Args:
         dump_folder (list): Folder(s) containing the panels
-        hgmd_dict (dict): Dict of HGMD parsed data
+        type_panels (list): List of possible panel types
         single_genes (list): List of single genes to be transformed into panels
                             Defaults to None
 
@@ -545,6 +545,8 @@ def parse_test_directory(file: str):
 
     ci_dict = {}
 
+    methods = ["panel", "WES", "Single gene"]
+
     for row in range(sheet_with_tests.nrows):
         if row >= 2:
             (
@@ -560,7 +562,7 @@ def parse_test_directory(file: str):
 
             test_code = test_code.strip()
 
-            if "panel" in method or "WES" in method or "Single gene" in method:
+            if any(x in method for x in methods):
                 clinind_data[test_code]["targets"] = targets.strip()
                 clinind_data[test_code]["method"] = method.strip()
                 clinind_data[test_code]["name"] = ci.strip()
@@ -616,7 +618,7 @@ def clean_targets(clinind_data: dict):
         for indiv_target in targets.split(";"):
             indiv_target = indiv_target.strip()
 
-            if "Relevant" not in indiv_target:
+            if "Relevant" not in indiv_target.capitalize():
                 # Panels can have "As dictated by blabla" "As indicated by"
                 # so I remove those
                 if indiv_target.startswith("As "):
