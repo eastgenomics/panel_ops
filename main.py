@@ -81,21 +81,21 @@ def main(**param):
 
     elif param["command"] == "generate":
         # Generate panelapp dump
-        if param["panelapp_all"] is True:
+        if param["panelapp_all"]:
             all_panels = ops.utils.get_all_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 all_panels, "all"
             )
 
         # Generate panelapp dump for GMS panels
-        if param["panelapp_gms"] is True:
+        if param["panelapp_gms"]:
             gms_panels = ops.utils.get_GMS_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 gms_panels, "GMS"
             )
 
         # Generate panelapp dump for non-GMS panels
-        if param["panelapp_non_gms"] is True:
+        if param["panelapp_non_gms"]:
             non_gms_panels = ops.utils.get_non_GMS_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 non_gms_panels, "non_GMS"
