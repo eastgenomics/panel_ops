@@ -6,7 +6,7 @@
 - check: Check the panelapp dump folder given against the database
 - generate:
     - panelapp_gms: Generate panelapp dump using only GMS panels
-    - panelapp_all: Generate panelapp dump using only all panels
+    - panelapp_all: Generate panelapp dump using all panels
     - gene_files: Generate files for panels with gene symbols only
     - json: Generate django fixture using panelapp dump folder
     - genepanels: Generate genepanels file
@@ -40,6 +40,7 @@ def main(**param):
         # single gene panels
         single_genes = ops.utils.gather_single_genes(clean_clinind_data)
 
+    # check which subparser is being used
     if param["command"] == "check":
         assert clean_clinind_data is not None, (
             "-t option is needed for check cmd"
@@ -61,14 +62,17 @@ def main(**param):
                 files["panels"].split(","), config_panel_db.panel_types,
                 single_genes
             )
+
             # parse hgnc dump data for transcript purposes
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+
             # get all the transcripts from the nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
             )
+
             # check the database data
             check = ops.check.check_db(
                 files, session, meta, panelapp_dict, superpanel_dict,
@@ -118,7 +122,7 @@ def main(**param):
 
             # Primary keys for importing the data in the database
             pk_dict = {
-                # they start at 1 because I loop over those elements
+                # they start at 0 because I loop over those elements
                 # makes it easier to keep track off
                 # + might that in the update process later (i.e. get last ele
                 # in a table and put it in the pk_dict)
@@ -131,6 +135,7 @@ def main(**param):
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+
             # get all transcripts in nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
@@ -179,6 +184,7 @@ if __name__ == "__main__":
 
     subparser = parser.add_subparsers(dest="command")
 
+    # Generate subparser
     generate = subparser.add_parser("generate")
     generate.add_argument(
         "-gms", "--panelapp_gms", action="store_true",
@@ -212,6 +218,7 @@ if __name__ == "__main__":
     )
     generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
 
+    # Check subparser
     check = subparser.add_parser("check")
     check.add_argument(
         "dumps", metavar="KEY=VALUE", nargs=4,
@@ -222,6 +229,7 @@ if __name__ == "__main__":
         )
     )
 
+    # Mod_db subparser
     mod_db = subparser.add_parser("mod_db")
     mod_db.add_argument("user", help="Admin username for panel_database")
     mod_db.add_argument("passwd", help="Admin passwd for panel_database")
