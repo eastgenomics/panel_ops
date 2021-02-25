@@ -6,7 +6,7 @@
 - check: Check the panelapp dump folder given against the database
 - generate:
     - panelapp_gms: Generate panelapp dump using only GMS panels
-    - panelapp_all: Generate panelapp dump using only all panels
+    - panelapp_all: Generate panelapp dump using all panels
     - gene_files: Generate files for panels with gene symbols only
     - json: Generate django fixture using panelapp dump folder
     - genepanels: Generate genepanels file
@@ -40,6 +40,7 @@ def main(**param):
         # single gene panels
         single_genes = ops.utils.gather_single_genes(clean_clinind_data)
 
+    # Check which subparser is being used
     if param["command"] == "check":
         assert clean_clinind_data is not None, (
             "-t option is needed for check cmd"
@@ -54,6 +55,7 @@ def main(**param):
             session, meta = ops.utils.connect_to_db(
                 user, passwd, host, "panel_database"
             )
+
             # gather data from panels
             (
                 panelapp_dict, superpanel_dict, gene_dict
@@ -61,14 +63,17 @@ def main(**param):
                 files["panels"].split(","), config_panel_db.panel_types,
                 single_genes
             )
+
             # parse hgnc dump data for transcript purposes
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+
             # get all the transcripts from the nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
             )
+
             # check the database data
             check = ops.check.check_db(
                 files, session, meta, panelapp_dict, superpanel_dict,
@@ -77,21 +82,21 @@ def main(**param):
 
     elif param["command"] == "generate":
         # Generate panelapp dump
-        if param["panelapp_all"] is True:
+        if param["panelapp_all"]:
             all_panels = ops.utils.get_all_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 all_panels, "all"
             )
 
         # Generate panelapp dump for GMS panels
-        if param["panelapp_gms"] is True:
+        if param["panelapp_gms"]:
             gms_panels = ops.utils.get_GMS_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 gms_panels, "GMS"
             )
 
         # Generate panelapp dump for non-GMS panels
-        if param["panelapp_non_gms"] is True:
+        if param["panelapp_non_gms"]:
             non_gms_panels = ops.utils.get_non_GMS_panels()
             panelapp_dump = ops.generate.generate_panelapp_dump(
                 non_gms_panels, "non_GMS"
@@ -118,7 +123,7 @@ def main(**param):
 
             # Primary keys for importing the data in the database
             pk_dict = {
-                # they start at 1 because I loop over those elements
+                # they start at 0 because I loop over those elements
                 # makes it easier to keep track off
                 # + might that in the update process later (i.e. get last ele
                 # in a table and put it in the pk_dict)
@@ -131,6 +136,7 @@ def main(**param):
             (
                 hgnc_data, symbol_dict, alias_dict, prev_dict
             ) = ops.utils.parse_hgnc_dump(files["hgnc"])
+
             # get all transcripts in nirvana gff
             nirvana_data = ops.utils.get_nirvana_data_dict(
                 files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
