@@ -26,6 +26,85 @@ sys.path.append(ops.config.path_to_panel_config)
 import config_panel_db
 
 
+def parse_args():
+    """ Parse args
+
+    Returns:
+        dict: Dict with subparser used and arguments used
+    """
+
+    parser = argparse.ArgumentParser(
+        description="Prepare and import data for Panelapp database"
+    )
+
+    parser.add_argument("-t", "--test_xls", help="NHS test directory")
+
+    subparser = parser.add_subparsers(dest="command")
+
+    generate = subparser.add_parser("generate")
+    generate.add_argument(
+        "-gms", "--panelapp_gms", action="store_true",
+        help="Generate panelapp GMS dump"
+    )
+    generate.add_argument(
+        "-non-gms", "--panelapp_non_gms", action="store_true",
+        help="Generate panelapp non-GMS dump"
+    )
+    generate.add_argument(
+        "-all", "--panelapp_all", action="store_true",
+        help="Generate all panelapp dump"
+    )
+    generate.add_argument(
+        "-j", "--json", metavar="KEY=VALUE", nargs=4,
+        help=(
+            "Generate django json that need to be imported in the database. "
+            "Generating the jsons files require 4 files: "
+            "the panelapp dump(s)/custom dump(s) to actually import, "
+            "genes2transcripts file, hgnc dump and the nirvana GFF. They need "
+            "to be given as following: panels=folder,folder hgnc=file "
+            "g2t=file nirvana=file. The panelapp dump file path should "
+            "contain the following string: gms, non-gms, in-house, "
+            "single_gene. This allows to find the type of panel the folder "
+            "contains."
+        )
+    )
+    generate.add_argument(
+        "-gp", "--genepanels", action="store_true",
+        help="Generate genepanels"
+    )
+    generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
+
+    check = subparser.add_parser("check")
+    check.add_argument(
+        "dumps", metavar="KEY=VALUE", nargs=4,
+        help=(
+            "Provide panelapp dump and genes2transcripts. The format for "
+            "passing those arguments is: panels=folder,folder hgnc=file g2t=file "
+            "nirvana=file."
+        )
+    )
+
+    mod_db = subparser.add_parser("mod_db")
+    mod_db.add_argument("user", help="Admin username for panel_database")
+    mod_db.add_argument("passwd", help="Admin passwd for panel_database")
+
+    mod_db.add_argument(
+        "-i", "--initial_import",
+        help="Import pointed json in the database"
+    )
+    mod_db.add_argument(
+        "-hgnc", "--hgnc", metavar="KEY=VALUE", nargs=4,
+        help=(
+            "Import hgnc dump in the database. Need to provide "
+            "hgnc=file date=yymmdd nirvana=file g2t=file"
+        )
+    )
+
+    args = vars(parser.parse_args())
+
+    return args
+
+
 def main(**param):
     user = config_panel_db.user_ro
     passwd = config_panel_db.passwd_ro
@@ -177,72 +256,5 @@ def main(**param):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Prepare and import data for Panelapp database"
-    )
-
-    parser.add_argument("-t", "--test_xls", help="NHS test directory")
-
-    subparser = parser.add_subparsers(dest="command")
-
-    generate = subparser.add_parser("generate")
-    generate.add_argument(
-        "-gms", "--panelapp_gms", action="store_true",
-        help="Generate panelapp GMS dump"
-    )
-    generate.add_argument(
-        "-non-gms", "--panelapp_non_gms", action="store_true",
-        help="Generate panelapp non-GMS dump"
-    )
-    generate.add_argument(
-        "-all", "--panelapp_all", action="store_true",
-        help="Generate all panelapp dump"
-    )
-    generate.add_argument(
-        "-j", "--json", metavar="KEY=VALUE", nargs=4,
-        help=(
-            "Generate django json that need to be imported in the database. "
-            "Generating the jsons files require 4 files: "
-            "the panelapp dump(s)/custom dump(s) to actually import, "
-            "genes2transcripts file, hgnc dump and the nirvana GFF. They need "
-            "to be given as following: panels=folder,folder hgnc=file "
-            "g2t=file nirvana=file. The panelapp dump file path should "
-            "contain the following string: gms, non-gms, in-house, "
-            "single_gene. This allows to find the type of panel the folder "
-            "contains."
-        )
-    )
-    generate.add_argument(
-        "-gp", "--genepanels", action="store_true",
-        help="Generate genepanels"
-    )
-    generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
-
-    check = subparser.add_parser("check")
-    check.add_argument(
-        "dumps", metavar="KEY=VALUE", nargs=4,
-        help=(
-            "Provide panelapp dump and genes2transcripts. The format for "
-            "passing those arguments is: panels=folder,folder hgnc=file g2t=file "
-            "nirvana=file."
-        )
-    )
-
-    mod_db = subparser.add_parser("mod_db")
-    mod_db.add_argument("user", help="Admin username for panel_database")
-    mod_db.add_argument("passwd", help="Admin passwd for panel_database")
-
-    mod_db.add_argument(
-        "-i", "--initial_import",
-        help="Import pointed json in the database"
-    )
-    mod_db.add_argument(
-        "-hgnc", "--hgnc", metavar="KEY=VALUE", nargs=4,
-        help=(
-            "Import hgnc dump in the database. Need to provide "
-            "hgnc=file date=yymmdd nirvana=file g2t=file"
-        )
-    )
-
-    args = vars(parser.parse_args())
+    args = parse_args()
     main(**args)
