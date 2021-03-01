@@ -50,7 +50,7 @@ def check_db(
     g2t_tb = meta.tables["genes2transcripts"]
     transcript_tb = meta.tables["transcript"]
 
-    error_tracker = False
+    error_detected = False
 
     # check the clinical indications structure
     ci_errors = check_clinical_indications(
@@ -60,7 +60,7 @@ def check_db(
 
     # check if errors in the clinical indications bit
     for error in ci_errors:
-        error_tracker = True
+        error_detected = True
         CHECK.error(error)
 
     global_panel_errors, panel_errors = check_panels(
@@ -71,7 +71,7 @@ def check_db(
     # check if errors in the total number of panels
     if global_panel_errors is not None:
         for error in global_panel_errors:
-            error_tracker = True
+            error_detected = True
             CHECK.error(error)
 
     g2t_data = parse_g2t(files["g2t"])
@@ -82,27 +82,27 @@ def check_db(
     )
 
     for error in g2t_errors:
-        error_tracker = True
+        error_detected = True
         CHECK.error(error)
 
     # check if errors in the individual panels
     for panelapp_id, logged_data in panel_errors.items():
         for error_type, errors in logged_data.items():
             for error in errors:
-                error_tracker = True
+                error_detected = True
                 CHECK.error(
                     f"Panelapp_id {panelapp_id}-{error_type}: {error}"
                 )
 
     # check if there's an error to raise the exception
-    if error_tracker is True:
+    if error_detected is True:
         raise Exception(
             "Error(s) in the check has been found. Check the check_log for "
             "more details"
         )
     else:
         msg = (
-            f"Checking against panelapp dump from {', '.join(files.values())} "
+            f"Checking panels from {', '.join(files.values())} "
             f"against database on {get_date()}: correct"
         )
         output_to_loggers(msg, CONSOLE, CHECK)
@@ -367,7 +367,6 @@ def check_panels(
 
             for subpanel in superpanel_dict[panelapp_id]["subpanels"]:
                 hgnc_ids.update(panelapp_dict[subpanel]["genes"])
-
         else:
             # should have been caught by the check just before
             raise Exception(
