@@ -14,7 +14,7 @@ from panelapp import queries
 from hgnc_queries import get_id as hq_get_id
 
 from .hardcoded_tests import tests as hd_tests
-from .logger import setup_logging
+from .logger import setup_logging, output_to_loggers
 
 
 CONSOLE, UTILS = setup_logging("utils")
@@ -30,7 +30,7 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
-def get_new_output_folder(output_dump: str, output_suffix: str = ""):
+def write_new_output_folder(output_dump: str, output_suffix: str = ""):
     """ Return new folder to output files in
 
     Args:
@@ -56,6 +56,9 @@ def get_new_output_folder(output_dump: str, output_suffix: str = ""):
 
         if output_suffix:
             output_folder = f"{output_folder}_{output_suffix}"
+
+    # create folders
+    Path(output_folder).mkdir(parents=True)
 
     return output_folder
 
@@ -112,22 +115,6 @@ def get_GMS_panels():
     """
 
     return queries.get_all_signedoff_panels()
-
-
-def get_non_GMS_panels():
-    """ Return dict of non-GMS panels panelapp_ids to panel object
-
-    Returns:
-        dict: Dict of non-GMS panels in panelapp
-    """
-
-    signedoff_panels = queries.get_all_signedoff_panels()
-    all_panels = queries.get_all_panels()
-
-    for panel_id in signedoff_panels:
-        del all_panels[panel_id]
-
-    return all_panels
 
 
 def get_panel_type(type_of_panels: list, dump_folder: str):
@@ -203,7 +190,7 @@ def get_nirvana_data_dict(
         prev_data (dict): Dict of previous symbol HGNC data
 
     Returns:
-        dict: Dict of gene2transcripts
+        dict: Dict of gene2transcripts2exons
     """
 
     nirvana_tx_dict = defaultdict(
@@ -224,7 +211,7 @@ def get_nirvana_data_dict(
             info_fields = info_field.split("; ")
             info_dict = {}
 
-            # skip lines where the entity type is UTR, CDS
+            # skip lines where the entity type is gene, UTR, CDS
             if record_type in ["UTR", "CDS"]:
                 continue
 
@@ -394,7 +381,7 @@ def parse_hgnc_dump(hgnc_file: str):
                         data.setdefault(hgnc_id, {})
                     else:
                         # we have the index of the line so we can automatically
-                        # get the header and use it as a subkey in the dict
+                        # get the header and use it has a subkey in the dict
                         data[hgnc_id][reformatted_headers[j]] = ele
 
                 # aliases and previous symbols are represented that way:
@@ -448,7 +435,7 @@ def create_panelapp_dict(
 
     Args:
         dump_folder (list): Folder(s) containing the panels
-        type_panels (list): List of possible panel types
+        hgmd_dict (dict): Dict of HGMD parsed data
         single_genes (list): List of single genes to be transformed into panels
                             Defaults to None
 
@@ -545,8 +532,6 @@ def parse_test_directory(file: str):
 
     ci_dict = {}
 
-    methods = ["panel", "WES", "Single gene"]
-
     for row in range(sheet_with_tests.nrows):
         if row >= 2:
             (
@@ -562,7 +547,7 @@ def parse_test_directory(file: str):
 
             test_code = test_code.strip()
 
-            if any(x in method for x in methods):
+            if "panel" in method or "WES" in method or "Single gene" in method:
                 clinind_data[test_code]["targets"] = targets.strip()
                 clinind_data[test_code]["method"] = method.strip()
                 clinind_data[test_code]["name"] = ci.strip()
@@ -573,7 +558,7 @@ def parse_test_directory(file: str):
 
 def clean_targets(clinind_data: dict):
     """ Replace the methods from the XLS to abbreviation:
-    WES and co -> P
+    WES -> P
     Panel -> P
     Single Gene -> G
 
@@ -617,12 +602,17 @@ def clean_targets(clinind_data: dict):
 
         for indiv_target in targets.split(";"):
             indiv_target = indiv_target.strip()
+            removed_msg = (
+                f"{test_code} removed from considered tests. Text: "
+                f"{indiv_target}"
+            )
 
-            if "Relevant" not in indiv_target.capitalize():
+            if "Relevant" not in indiv_target:
                 # Panels can have "As dictated by blabla" "As indicated by"
                 # so I remove those
                 if indiv_target.startswith("As "):
                     ci_to_remove.append(test_code)
+                    output_to_loggers(removed_msg, CONSOLE, UTILS)
 
                 # check if the target has parentheses with numbers in there
                 match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
@@ -648,8 +638,10 @@ def clean_targets(clinind_data: dict):
                         # only case where this happens is a
                         # As dictated by clinical indication case
                         ci_to_remove.append(test_code)
+                        output_to_loggers(removed_msg, CONSOLE, UTILS)
             else:
                 ci_to_remove.append(test_code)
+                output_to_loggers(removed_msg, CONSOLE, UTILS)
 
         # handle the hard coded tests
         if test_code in hd_tests:
