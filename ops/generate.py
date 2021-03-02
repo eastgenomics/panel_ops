@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, get_new_output_folder, parse_g2t, parse_gemini_dump,
+    get_date, write_new_output_folder, parse_g2t, parse_gemini_dump,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
@@ -15,7 +15,7 @@ from .utils import (
 CONSOLE, GENERATION = setup_logging("generation")
 
 
-def generate_panelapp_dump(all_panels: dict, type_panel: str):
+def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
     """ Generate tsv for every panelapp panel
 
     Args:
@@ -23,7 +23,7 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
         type_panel (str): Type of panels between GMS and all panels
 
     Returns:
-        str: Location where the panels will be written
+        str: Location where the panels were written
     """
 
     msg = f"Creating '{type_panel}' panelapp dump"
@@ -31,10 +31,7 @@ def generate_panelapp_dump(all_panels: dict, type_panel: str):
 
     # name of the main folder
     output_dump = f"{type_panel}_panelapp_dump"
-    output_folder = get_new_output_folder(output_dump)
-
-    # create the folders
-    Path(output_folder).mkdir(parents=True)
+    output_folder = write_new_output_folder(output_dump)
 
     # loop through the panels
     for panel_id, panel in all_panels.items():
@@ -121,8 +118,7 @@ def generate_genepanels(session, meta):
     # sort the data using panel names and genes
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[2]))
 
-    output_folder = get_new_output_folder("sql_dump", "genepanels")
-    Path(output_folder).mkdir(parents=True)
+    output_folder = write_new_output_folder("sql_dump", "genepanels")
     output_file = f"{output_folder}/{get_date()}_genepanels.tsv"
 
     with open(output_file, "w") as f:
@@ -229,8 +225,7 @@ def generate_django_jsons(
         for ele in data:
             all_elements.append(ele)
 
-    output_folder = get_new_output_folder("django_fixtures")
-    Path(output_folder).mkdir(parents=True)
+    output_folder = write_new_output_folder("django_fixtures")
     output_file = f"{output_folder}/{today}_json_dump.json"
 
     # write the single json containing all the elements in the database
@@ -327,8 +322,7 @@ def generate_manifest(session, meta, gemini_dump: str):
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
 
-    output_folder = get_new_output_folder("sql_dump", "bio_manifest")
-    Path(output_folder).mkdir(parents=True)
+    output_folder = write_new_output_folder("sql_dump", "bio_manifest")
     output_file = f"{output_folder}/{get_date()}_bio_manifest.tsv"
 
     with open(output_file, "w") as f:
