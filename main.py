@@ -47,10 +47,6 @@ def parse_args():
         help="Generate panelapp GMS dump"
     )
     generate.add_argument(
-        "-non-gms", "--panelapp_non_gms", action="store_true",
-        help="Generate panelapp non-GMS dump"
-    )
-    generate.add_argument(
         "-all", "--panelapp_all", action="store_true",
         help="Generate all panelapp dump"
     )
@@ -76,7 +72,7 @@ def parse_args():
 
     check = subparser.add_parser("check")
     check.add_argument(
-        "dumps", metavar="KEY=VALUE", nargs=4,
+        "files", metavar="KEY=VALUE", nargs=4,
         help=(
             "Provide panelapp dump and genes2transcripts. The format for "
             "passing those arguments is: panels=folder,folder hgnc=file g2t=file "
@@ -125,10 +121,10 @@ def main(**param):
             "-t option is needed for check cmd"
         )
         # Check integrity of database for all things panel
-        if param["dumps"]:
+        if param["files"]:
             files = {
                 ele.split("=")[0]: ele.split("=")[1]
-                for ele in param["dumps"]
+                for ele in param["files"]
             }
 
             session, meta = ops.utils.connect_to_db(
@@ -163,22 +159,15 @@ def main(**param):
         # Generate panelapp dump
         if param["panelapp_all"]:
             all_panels = ops.utils.get_all_panels()
-            panelapp_dump = ops.generate.generate_panelapp_dump(
+            panelapp_dump = ops.generate.generate_panelapp_tsvs(
                 all_panels, "all"
             )
 
         # Generate panelapp dump for GMS panels
         if param["panelapp_gms"]:
             gms_panels = ops.utils.get_GMS_panels()
-            panelapp_dump = ops.generate.generate_panelapp_dump(
+            panelapp_dump = ops.generate.generate_panelapp_tsvs(
                 gms_panels, "GMS"
-            )
-
-        # Generate panelapp dump for non-GMS panels
-        if param["panelapp_non_gms"]:
-            non_gms_panels = ops.utils.get_non_GMS_panels()
-            panelapp_dump = ops.generate.generate_panelapp_dump(
-                non_gms_panels, "non_GMS"
             )
 
         # Generate a bioinformatic manifest type file for reports
