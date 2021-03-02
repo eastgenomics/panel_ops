@@ -14,7 +14,7 @@ from panelapp import queries
 from hgnc_queries import get_id as hq_get_id
 
 from .hardcoded_tests import tests as hd_tests
-from .logger import setup_logging
+from .logger import setup_logging, output_to_loggers
 
 
 CONSOLE, UTILS = setup_logging("utils")
@@ -30,7 +30,7 @@ def get_date():
     return str(datetime.date.today())[2:].replace("-", "")
 
 
-def get_new_output_folder(output_dump: str, output_suffix: str = ""):
+def write_new_output_folder(output_dump: str, output_suffix: str = ""):
     """ Return new folder to output files in
 
     Args:
@@ -56,6 +56,9 @@ def get_new_output_folder(output_dump: str, output_suffix: str = ""):
 
         if output_suffix:
             output_folder = f"{output_folder}_{output_suffix}"
+
+    # create folders
+    Path(output_folder).mkdir(parents=True)
 
     return output_folder
 
@@ -112,22 +115,6 @@ def get_GMS_panels():
     """
 
     return queries.get_all_signedoff_panels()
-
-
-def get_non_GMS_panels():
-    """ Return dict of panelapp_id to panel object
-
-    Returns:
-        dict: Dict of all panels in panelapp
-    """
-
-    signedoff_panels = queries.get_all_signedoff_panels()
-    all_panels = queries.get_all_panels()
-
-    for panel_id in signedoff_panels:
-        del all_panels[panel_id]
-
-    return all_panels
 
 
 def get_panel_type(type_of_panels: list, dump_folder: str):
@@ -571,7 +558,7 @@ def parse_test_directory(file: str):
 
 def clean_targets(clinind_data: dict):
     """ Replace the methods from the XLS to abbreviation:
-    WES and co -> P
+    WES -> P
     Panel -> P
     Single Gene -> G
 
@@ -615,12 +602,17 @@ def clean_targets(clinind_data: dict):
 
         for indiv_target in targets.split(";"):
             indiv_target = indiv_target.strip()
+            removed_msg = (
+                f"{test_code} removed from considered tests. Text: "
+                f"{indiv_target}"
+            )
 
             if "Relevant" not in indiv_target:
                 # Panels can have "As dictated by blabla" "As indicated by"
                 # so I remove those
                 if indiv_target.startswith("As "):
                     ci_to_remove.append(test_code)
+                    output_to_loggers(removed_msg, CONSOLE, UTILS)
 
                 # check if the target has parentheses with numbers in there
                 match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
@@ -646,8 +638,10 @@ def clean_targets(clinind_data: dict):
                         # only case where this happens is a
                         # As dictated by clinical indication case
                         ci_to_remove.append(test_code)
+                        output_to_loggers(removed_msg, CONSOLE, UTILS)
             else:
                 ci_to_remove.append(test_code)
+                output_to_loggers(removed_msg, CONSOLE, UTILS)
 
         # handle the hard coded tests
         if test_code in hd_tests:
