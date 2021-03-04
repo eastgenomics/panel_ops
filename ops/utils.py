@@ -38,7 +38,7 @@ def write_new_output_folder(output_dump: str, output_suffix: str = ""):
         output_suffix (str, optional): Suffix to be added to subfolder. Defaults to "".
 
     Returns:
-        str: Folder path to the final output
+        str: Folder path to the final output folder
     """
 
     output_date = get_date()
@@ -108,7 +108,7 @@ def get_all_panels():
 
 
 def get_GMS_panels():
-    """ Return dict of panelapp_id to panel object
+    """ Return dict of GMS panels panelapp id to panel object
 
     Returns:
         dict: Dict of GMS panels in panelapp
@@ -183,7 +183,7 @@ def get_nirvana_data_dict(
 ):
     """ Return dict of parsed data for Nirvana
     Args:
-        nirvana_refseq (str): GFF file for nirvana
+        nirvana_refseq (str): GFF filepath for nirvana
         hgnc_data (dict): Dict of HGNC data
         symbol_data (dict): Dict of main symbol HGNC data
         alias_data (dict): Dict of alias HGNC data
@@ -421,11 +421,7 @@ def get_header_index(header_name: str, headers: list):
         int: Index for given header name
     """
 
-    return [
-        i
-        for i, ele in enumerate(headers)
-        if ele == header_name
-    ][0]
+    return headers.index(header_name)
 
 
 def create_panelapp_dict(
