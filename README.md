@@ -29,8 +29,8 @@ You may need to install the Python 3 and MySQL development headers and libraries
 
 Usage:
 
-```python3
-source /panels/panel_env/bin/activate
+```bash
+source /home/panels/panel_env/bin/activate
 
 # output all panelapp panels in folder ${day}_panelapp_dump
 python main.py generate -all 
@@ -38,21 +38,24 @@ python main.py generate -all
 python main.py generate -gms 
 
 # output django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
-python main.py -t ${national_test_directory_xls} generate -j dump=${panelapp_dump_folder};${in-house_dump} hgnc=${hgnc_dump} nirvana=${nirvana_gff} g2t=${g2t_file}
+python main.py -t ${national_test_directory_xls} generate -j panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
 # output sql_dump/${day}_genepanels.txt
 python main.py generate -gp 
-# output sql_dump/${day}_bio_manifest.tsv
+# output sql_dump/${day}_sample2genes.tsv
 python main.py generate -m manifest.csv
 
 # check db structure against panelapp dump
-python main.py -t ${national_test_directory_xls} check panelapp=${panelapp_dump_folder};${in-house_dump} hgnc=${hgnc_dump} nirvana=${nirvana_gff} g2t=${g2t_file}
+python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
 # import the data in the database
-python main.py mod_db ${user} ${admin_passwd} -i ${django_fixture_json_file}
-python main.py mod_db ${user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
+python main.py mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
+# import hgnc data
+python main.py mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
 ```
 
 ## What does this output?
 
 Panelapp dump of the day, django fixtures, sql dumps...
+
+### This was made by EMEE GLH
