@@ -4,11 +4,11 @@ from pathlib import Path
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, write_new_output_folder, parse_g2t, parse_gemini_dump,
-    create_panelapp_dict, gather_ref_django_json,
-    gather_panel_types_django_json, gather_feature_types_django_json,
-    gather_panel_data_django_json, gather_superpanel_data_django_json,
-    gather_transcripts, gather_clinical_indication_data_django_json
+    get_date, write_new_output_folder, parse_gemini_dump, create_panelapp_dict,
+    gather_ref_django_json, gather_panel_types_django_json,
+    gather_feature_types_django_json, gather_panel_data_django_json,
+    gather_superpanel_data_django_json, gather_transcripts,
+    gather_clinical_indication_data_django_json
 )
 
 
@@ -133,9 +133,9 @@ def generate_genepanels(session, meta):
 
 
 def generate_django_jsons(
-    panel_dumps: list, clean_clinind_data: dict, g2t_file: str,
-    nirvana_data: dict, single_genes: list, references: list,
-    feature_types: list, panel_types: list, pk_dict: dict
+    panel_dumps: list, clean_clinind_data: dict, g2t_data: str,
+    single_genes: list, references: list, feature_types: list,
+    panel_types: list, pk_dict: dict
 ):
     """ Write the jsons for every table in the panel_database + full json for
         importing in the database
@@ -143,8 +143,7 @@ def generate_django_jsons(
     Args:
         panel_dumps (list): List of files to create panel dumps for
         clean_clinind_data (dict): Data gathered from the national test directory
-        g2t_file (dict): Data gathered from g2t dump
-        nirvana_data (dict): Data gathered from nirvana gff
+        g2t_data (dict): Data gathered from g2t dump
         single_genes (list): List of single genes associated with clinical indications
         references (list): Hardcoded list of references to consider, defined in config_panel_db.py
         feature_types (list): Hardcoded list of feature types to consider, defined in config_panel_db.py
@@ -189,12 +188,9 @@ def generate_django_jsons(
         superpanel_dict, panel_json, paneltype_json, panelfeature_json, pk_dict
     )
 
-    # Parse genes2transcripts file
-    g2t_data = parse_g2t(g2t_file)
-
     # Create the list for data associated with transcripts
     transcript_json, g2t_json = gather_transcripts(
-        gene_json, reference_json, nirvana_data, g2t_data, pk_dict
+        gene_json, reference_json, g2t_data, pk_dict
     )
 
     # Create the list of clinical indication
