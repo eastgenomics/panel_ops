@@ -5,7 +5,6 @@ import django
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
-from .utils import parse_hgnc_dump
 
 sys.path.append(path_to_panel_palace)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "panel_palace.settings")
