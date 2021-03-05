@@ -108,7 +108,7 @@ def get_all_panels():
 
 
 def get_GMS_panels():
-    """ Return dict of GMS panels panelapp id to panel object
+    """ Return dict of panelapp_id to panel object
 
     Returns:
         dict: Dict of GMS panels in panelapp
@@ -184,6 +184,55 @@ def parse_g2t(file):
             g2t[gene][transcript] = (clinical_tx_status, canonical_status)
 
     return g2t
+
+
+def parse_hgnc_dump(hgnc_file: str):
+    """ Parse the hgnc dump and return a dict of the data in the dump
+
+    Args:
+        hgnc_file (str): Path to the hgnc file
+
+    Returns:
+        dict: Dict of hgnc data
+    """
+
+    data = {}
+
+    with open(hgnc_file) as f:
+        for i, line in enumerate(f):
+            # first line is headers
+            if i == 0:
+                reformatted_headers = []
+                headers = line.strip().split("\t")
+
+                for header in headers:
+                    # need transform the header name to the table attribute name
+                    if "supplied" in header:
+                        # external links provided always have: "(supplied by ...)"
+                        # split on the (, get the first element, strip it
+                        # (there's spaces sometimes), lower the characters and
+                        # replace spaces by underscores
+                        header = header.split("(")[0].strip().lower().replace(" ", "_")
+                        # they also need ext_ because they're external links
+                        header = f"ext_{header}"
+                    else:
+                        header = header.lower().replace(" ", "_")
+
+                    reformatted_headers.append(header)
+
+            else:
+                line = line.strip("\n").split("\t")
+
+                for j, ele in enumerate(line):
+                    if j == 0:
+                        hgnc_id = ele
+                        data.setdefault(hgnc_id, {})
+                    else:
+                        # we have the index of the line so we can automatically
+                        # get the header and use it has a subkey in the dict
+                        data[hgnc_id][reformatted_headers[j]] = ele
+
+    return data
 
 
 def create_panelapp_dict(
