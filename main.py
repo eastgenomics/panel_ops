@@ -51,15 +51,14 @@ def parse_args():
         help="Generate all panelapp dump"
     )
     generate.add_argument(
-        "-j", "--json", metavar="KEY=VALUE", nargs=4,
+        "-j", "--json", metavar="KEY=VALUE", nargs=2,
         help=(
             "Generate django json that need to be imported in the database. "
-            "Generating the jsons files require 4 files: "
+            "Generating the jsons files require 2 files: "
             "the panelapp dump(s)/custom dump(s) to actually import, "
-            "genes2transcripts file, hgnc dump and the nirvana GFF. They need "
-            "to be given as following: panels=folder,folder hgnc=file "
-            "g2t=file nirvana=file. The panelapp dump file path should "
-            "contain the following string: gms, non-gms, in-house, "
+            "genes2transcripts file. They need to be given as following: "
+            "panels=folder,folder g2t=file. The panelapp dump file path "
+            "should contain the following string: gms, non-gms, in-house, "
             "single_gene. This allows to find the type of panel the folder "
             "contains."
         )
@@ -72,11 +71,10 @@ def parse_args():
 
     check = subparser.add_parser("check")
     check.add_argument(
-        "files", metavar="KEY=VALUE", nargs=4,
+        "files", metavar="KEY=VALUE", nargs=2,
         help=(
             "Provide panelapp dump and genes2transcripts. The format for "
-            "passing those arguments is: panels=folder,folder hgnc=file g2t=file "
-            "nirvana=file."
+            "passing those arguments is: panels=folder,folder g2t=file"
         )
     )
 
@@ -89,10 +87,10 @@ def parse_args():
         help="Import pointed json in the database"
     )
     mod_db.add_argument(
-        "-hgnc", "--hgnc", metavar="KEY=VALUE", nargs=4,
+        "-hgnc", "--hgnc", metavar="KEY=VALUE", nargs=2,
         help=(
             "Import hgnc dump in the database. Need to provide "
-            "hgnc=file date=yymmdd nirvana=file g2t=file"
+            "hgnc=file date=yymmdd"
         )
     )
 
@@ -139,20 +137,13 @@ def main(**param):
                 single_genes
             )
 
-            # parse hgnc dump data for transcript purposes
-            (
-                hgnc_data, symbol_dict, alias_dict, prev_dict
-            ) = ops.utils.parse_hgnc_dump(files["hgnc"])
-
             # get all the transcripts from the nirvana gff
-            nirvana_data = ops.utils.get_nirvana_data_dict(
-                files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
-            )
+            g2t_data = ops.utils.parse_g2t(files["g2t"])
 
             # check the database data
             check = ops.check.check_db(
                 files, session, meta, panelapp_dict, superpanel_dict,
-                gene_dict, nirvana_data, clean_clinind_data
+                gene_dict, g2t_data, clean_clinind_data
             )
 
     elif param["command"] == "generate":
@@ -200,20 +191,13 @@ def main(**param):
                 "gene": 0, "panel_type": 0, "transcript": 0, "g2t": 0
             }
 
-            # parse data from hgnc for transcript purposes
-            (
-                hgnc_data, symbol_dict, alias_dict, prev_dict
-            ) = ops.utils.parse_hgnc_dump(files["hgnc"])
-
             # get all transcripts in nirvana gff
-            nirvana_data = ops.utils.get_nirvana_data_dict(
-                files["nirvana"], hgnc_data, symbol_dict, alias_dict, prev_dict
-            )
+            g2t_data = ops.utils.parse_g2t(files["g2t"])
 
             # Generate the jsons for the import
             ops.generate.generate_django_jsons(
-                files["panels"].split(","), clean_clinind_data, files["g2t"],
-                nirvana_data, single_genes, config_panel_db.references,
+                files["panels"].split(","), clean_clinind_data, g2t_data,
+                single_genes, config_panel_db.references,
                 config_panel_db.feature_types, config_panel_db.panel_types,
                 pk_dict
             )
