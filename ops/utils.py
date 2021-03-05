@@ -167,247 +167,23 @@ def parse_g2t(file):
         dict: Dict of genes2transcripts
     """
 
-    g2t = {}
+    g2t = defaultdict(lambda: defaultdict(tuple))
 
     with open(file) as f:
         for line in f:
-            gene, transcript = line.strip().split()
-            g2t[gene] = transcript
+            clinical_tx_status = False
+            canonical_status = False
+            gene, transcript, clinical_tx, canonical = line.strip().split()
+
+            if not clinical_tx.startswith("not"):
+                clinical_tx_status = True
+
+            if not canonical.startswith("not"):
+                canonical_status = True
+
+            g2t[gene][transcript] = (clinical_tx_status, canonical_status)
 
     return g2t
-
-
-def get_nirvana_data_dict(
-    nirvana_gff: str, hgnc_data: dict, symbol_data: dict, alias_data: dict,
-    prev_data: dict
-):
-    """ Return dict of parsed data for Nirvana
-    Args:
-        nirvana_refseq (str): GFF file for nirvana
-        hgnc_data (dict): Dict of HGNC data
-        symbol_data (dict): Dict of main symbol HGNC data
-        alias_data (dict): Dict of alias HGNC data
-        prev_data (dict): Dict of previous symbol HGNC data
-
-    Returns:
-        dict: Dict of gene2transcripts2exons
-    """
-
-    nirvana_tx_dict = defaultdict(
-        lambda: defaultdict(
-            lambda: defaultdict(
-                lambda: defaultdict(None)
-            )
-        )
-    )
-
-    symbol2hgnc = {}
-
-    with gzip.open(nirvana_gff) as nir_fh:
-        for index, line in enumerate(nir_fh):
-            fields = line.decode("utf-8").strip().split("\t")
-            record_type = fields[2]
-            info_field = fields[8]
-            info_fields = info_field.split("; ")
-            info_dict = {}
-
-            # skip lines where the entity type is gene, UTR, CDS
-            if record_type in ["UTR", "CDS"]:
-                continue
-
-            for field in info_fields:
-                key, value = field.split(" ")
-                value = value.strip("\"").strip("\'")
-                info_dict[key] = value
-
-            gff_gene_name = info_dict["gene_name"]
-
-            if record_type == "gene":
-                # use HGNC for every thing
-                if "ensembl_gene_id" in info_dict:
-                    # use ENSG to find HGNC in the HGNC data dump
-                    hgnc_id = find_id_using_ensg(
-                        info_dict["ensembl_gene_id"], hgnc_data
-                    )
-
-                    # some hgnc ids don't have ENSGs or gff uses GRCh37 when
-                    # HGNC uses GRCh38
-                    if hgnc_id is None:
-                        hgnc_id, ensg_id = assign_ids_to_symbol(
-                            gff_gene_name, symbol_data, alias_data, prev_data
-                        )
-                else:
-                    hgnc_id, ensg_id = assign_ids_to_symbol(
-                        gff_gene_name, symbol_data, alias_data, prev_data
-                    )
-
-                # impossible to find the hgnc_id from ENSG + symbol --> 
-                # probably don't care (mitochondrial gene, LOC genes...)
-                if hgnc_id is None:
-                    continue
-                else:
-                    # add symbol2hgnc combo in dict
-                    symbol2hgnc[gff_gene_name] = hgnc_id
-
-                continue
-
-            gff_transcript = info_dict["transcript_id"]
-
-            # find the hgnc id using the gene symbol written on the line where
-            # transcripts are described
-            if gff_gene_name not in symbol2hgnc:
-                continue
-            else:
-                hgnc_id = symbol2hgnc[gff_gene_name]
-
-            if record_type == "transcript":
-                if "tag" in info_dict:
-                    nirvana_tx_dict[hgnc_id][gff_transcript]["canonical"] = True
-                else:
-                    nirvana_tx_dict[hgnc_id][gff_transcript]["canonical"] = False
-
-    return nirvana_tx_dict
-
-
-def find_id_using_ensg(ensg_id: str, hgnc_data: dict):
-    """ Find HGNC id using the ENSG id
-
-    Args:
-        ensg_id (str): ENSG id
-        hgnc_data (dict): Dict of HGNC data from HGNC dump
-
-    Returns:
-        str: HGNC id
-    """
-
-    for hgnc_id in hgnc_data:
-        if ensg_id == hgnc_data[hgnc_id]["ext_ensembl_id"]:
-            return hgnc_id
-
-    return
-
-
-def assign_ids_to_symbol(
-    gene_symbol: str, hgnc_data: dict, alias_data: dict, prev_data: dict
-):
-    """ Get the hgnc and ensg ids from a gene symbol
-
-    Args:
-        gene_symbol (str): Gene symbol
-        hgnc_data (dict): Dict of hgnc data
-        alias_data (dict): Dict of alias hgnc data
-        prev_data (dict): Dict of previous symbols hgnc data
-
-    Returns:
-        tuple: hgnc id and ensg id
-    """
-
-    hgnc_id = None
-    ensg_id = None
-
-    if gene_symbol in hgnc_data:
-        hgnc_id = hgnc_data[gene_symbol]["hgnc_id"]
-        ensg_id = hgnc_data[gene_symbol]["ensg_id"]
-    elif gene_symbol in alias_data:
-        hgnc_id = alias_data[gene_symbol]["hgnc_id"]
-        ensg_id = alias_data[gene_symbol]["ensg_id"]
-    elif gene_symbol in prev_data:
-        hgnc_id = prev_data[gene_symbol]["hgnc_id"]
-        ensg_id = prev_data[gene_symbol]["ensg_id"]
-
-    return hgnc_id, ensg_id
-
-
-def parse_hgnc_dump(hgnc_file: str):
-    """ Parse the hgnc dump and return a dict of the data in the dump
-
-    Args:
-        hgnc_file (str): Path to the hgnc file
-
-    Returns:
-        dict: Dict of hgnc data, symbol data, alias data, previous symbol data
-    """
-
-    data = {}
-    symbol_dict = {}
-    alias_dict = {}
-    prev_dict = {}
-
-    with open(hgnc_file) as f:
-        for i, line in enumerate(f):
-            # first line is headers
-            if i == 0:
-                reformatted_headers = []
-                headers = line.strip().split("\t")
-
-                for header in headers:
-                    # need transform the header name to the table attribute name
-                    if "supplied" in header:
-                        # external links provided always have: "(supplied by ...)"
-                        # split on the (, get the first element, strip it
-                        # (there's spaces sometimes), lower the characters and
-                        # replace spaces by underscores
-                        header = header.split("(")[0].strip().lower().replace(" ", "_")
-                        # they also need ext_ because they're external links
-                        header = f"ext_{header}"
-                    else:
-                        header = header.lower().replace(" ", "_")
-
-                    reformatted_headers.append(header)
-
-                # gather positions for the following headers
-                symbol_index = get_header_index(
-                    "approved_symbol", reformatted_headers
-                )
-                alias_index = get_header_index(
-                    "alias_symbols", reformatted_headers
-                )
-                prev_index = get_header_index(
-                    "previous_symbols", reformatted_headers
-                )
-                ensg_index = get_header_index(
-                    "ext_ensembl_id", reformatted_headers
-                )
-                hgnc_index = get_header_index(
-                    "hgnc_id", reformatted_headers
-                )
-
-            else:
-                line = line.strip("\n").split("\t")
-
-                for j, ele in enumerate(line):
-                    if j == 0:
-                        hgnc_id = ele
-                        data.setdefault(hgnc_id, {})
-                    else:
-                        # we have the index of the line so we can automatically
-                        # get the header and use it has a subkey in the dict
-                        data[hgnc_id][reformatted_headers[j]] = ele
-
-                # aliases and previous symbols are represented that way:
-                # "symbol|symbol..."
-                # so parse it
-                alias_symbols = line[alias_index].strip("\"").split("|")
-                prev_symbols = line[prev_index].strip("\"").split("|")
-
-                symbol_dict[line[symbol_index]] = {
-                    "hgnc_id": line[hgnc_index],
-                    "ensg_id": line[ensg_index]
-                }
-
-                for symbol in alias_symbols:
-                    alias_dict[symbol] = {
-                        "hgnc_id": line[hgnc_index],
-                        "ensg_id": line[ensg_index]
-                    }
-
-                for symbol in prev_symbols:
-                    prev_dict[symbol] = {
-                        "hgnc_id": line[hgnc_index],
-                        "ensg_id": line[ensg_index]
-                    }
-
-    return data, symbol_dict, alias_dict, prev_dict
 
 
 def get_header_index(header_name: str, headers: list):
@@ -421,11 +197,7 @@ def get_header_index(header_name: str, headers: list):
         int: Index for given header name
     """
 
-    return [
-        i
-        for i, ele in enumerate(headers)
-        if ele == header_name
-    ][0]
+    return headers.index(header_name)
 
 
 def create_panelapp_dict(
@@ -645,10 +417,17 @@ def clean_targets(clinind_data: dict):
 
         # handle the hard coded tests
         if test_code in hd_tests:
+            # remove test_code from the clinical indication to remove list
+            if test_code in ci_to_remove:
+                ci_to_remove.remove(test_code)
+
+            msg = f"{test_code} is added as a hardcoded test"
+            output_to_loggers(msg, CONSOLE, UTILS)
             clean_clinind_data[test_code]["panels"] = hd_tests[test_code]["panels"]
             clean_clinind_data[test_code]["gemini_name"] = hd_tests[test_code]["gemini_name"]
             clean_clinind_data[test_code]["tests"] = hd_tests[test_code]["tests"]
         else:
+            # if they are not hardcoded tests, add the tests key for future use
             clean_clinind_data[test_code]["tests"] = []
 
         # convert default dict to dict because accessing absent key later on
@@ -1181,15 +960,13 @@ def gather_clinical_indication_data_django_json(
 
 
 def gather_transcripts(
-    gene_json: list, reference_json: list, nirvana_data: dict, g2t_data: dict,
-    pk_dict: dict
+    gene_json: list, reference_json: list, g2t_data: dict, pk_dict: dict
 ):
     """ Create the transcripts and the needed link tables
 
     Args:
         gene_json (list): List of json objects for panels
         reference_json (list): List of json objects for panels
-        nirvana_data (dict): Dict of nirvana gff data
         g2t_data (dict): Dict of g2t data
         pk_dict (dict): Primary key dict
 
@@ -1208,13 +985,13 @@ def gather_transcripts(
     for gene_obj in gene_objs:
         hgnc_id = gene_obj["fields"]["hgnc_id"]
         # get all available transcripts from nirvana
-        all_transcripts = nirvana_data[hgnc_id]
+        all_transcripts = g2t_data[hgnc_id]
 
         # loop through the transcripts
-        for transcript in all_transcripts:
+        for transcript, statuses in all_transcripts.items():
             pk_dict["transcript"] += 1
             refseq_base, refseq_version = transcript.split(".")
-            transcript_data = all_transcripts[transcript]
+            clinical_tx, canonical_status = statuses
 
             # create the transcript obj
             transcript_json.append(
@@ -1222,7 +999,7 @@ def gather_transcripts(
                     "Transcript", pk_dict["transcript"], {
                         "refseq_base": refseq_base,
                         "version": refseq_version,
-                        "canonical": transcript_data["canonical"]
+                        "canonical": canonical_status
                     }
                 )
             )
@@ -1234,12 +1011,6 @@ def gather_transcripts(
                 if obj["fields"]["name"] == "GRCh37"
             ][0]
 
-            # use g2t data to check if current transcript is clinical
-            if transcript == g2t_data[hgnc_id]:
-                clinical = True
-            else:
-                clinical = False
-
             pk_dict["g2t"] += 1
             # create the g2t obj
             genes2transcripts_json.append(
@@ -1247,7 +1018,7 @@ def gather_transcripts(
                     "Genes2transcripts", pk_dict["g2t"], {
                         "gene_id": gene_pk, "reference_id": ref_pk,
                         "transcript_id": pk_dict["transcript"],
-                        "date": date, "clinical_transcript": clinical
+                        "date": date, "clinical_transcript": clinical_tx
                     }
                 )
             )
