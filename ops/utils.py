@@ -1177,15 +1177,13 @@ def gather_clinical_indication_data_django_json(
 
 
 def gather_transcripts(
-    gene_json: list, reference_json: list, nirvana_data: dict, g2t_data: dict,
-    pk_dict: dict
+    gene_json: list, reference_json: list, g2t_data: dict, pk_dict: dict
 ):
     """ Create the transcripts and the needed link tables
 
     Args:
         gene_json (list): List of json objects for panels
         reference_json (list): List of json objects for panels
-        nirvana_data (dict): Dict of nirvana gff data
         g2t_data (dict): Dict of g2t data
         pk_dict (dict): Primary key dict
 
@@ -1204,13 +1202,13 @@ def gather_transcripts(
     for gene_obj in gene_objs:
         hgnc_id = gene_obj["fields"]["hgnc_id"]
         # get all available transcripts from nirvana
-        all_transcripts = nirvana_data[hgnc_id]
+        all_transcripts = g2t_data[hgnc_id]
 
         # loop through the transcripts
-        for transcript in all_transcripts:
+        for transcript, statuses in all_transcripts.items():
             pk_dict["transcript"] += 1
             refseq_base, refseq_version = transcript.split(".")
-            transcript_data = all_transcripts[transcript]
+            clinical_tx, canonical_status = statuses
 
             # create the transcript obj
             transcript_json.append(
@@ -1218,7 +1216,7 @@ def gather_transcripts(
                     "Transcript", pk_dict["transcript"], {
                         "refseq_base": refseq_base,
                         "version": refseq_version,
-                        "canonical": transcript_data["canonical"]
+                        "canonical": canonical_status
                     }
                 )
             )
@@ -1230,12 +1228,6 @@ def gather_transcripts(
                 if obj["fields"]["name"] == "GRCh37"
             ][0]
 
-            # use g2t data to check if current transcript is clinical
-            if transcript == g2t_data[hgnc_id]:
-                clinical = True
-            else:
-                clinical = False
-
             pk_dict["g2t"] += 1
             # create the g2t obj
             genes2transcripts_json.append(
@@ -1243,7 +1235,7 @@ def gather_transcripts(
                     "Genes2transcripts", pk_dict["g2t"], {
                         "gene_id": gene_pk, "reference_id": ref_pk,
                         "transcript_id": pk_dict["transcript"],
-                        "date": date, "clinical_transcript": clinical
+                        "date": date, "clinical_transcript": clinical_tx
                     }
                 )
             )
