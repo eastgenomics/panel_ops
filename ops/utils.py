@@ -403,10 +403,17 @@ def clean_targets(clinind_data: dict):
 
         # handle the hard coded tests
         if test_code in hd_tests:
+            # remove test_code from the clinical indication to remove list
+            if test_code in ci_to_remove:
+                ci_to_remove.remove(test_code)
+
+            msg = f"{test_code} is added as a hardcoded test"
+            output_to_loggers(msg, CONSOLE, UTILS)
             clean_clinind_data[test_code]["panels"] = hd_tests[test_code]["panels"]
             clean_clinind_data[test_code]["gemini_name"] = hd_tests[test_code]["gemini_name"]
             clean_clinind_data[test_code]["tests"] = hd_tests[test_code]["tests"]
         else:
+            # if they are not hardcoded tests, add the tests key for future use
             clean_clinind_data[test_code]["tests"] = []
 
         # convert default dict to dict because accessing absent key later on
