@@ -4,7 +4,7 @@ import regex
 from sqlalchemy import distinct
 
 from .logger import setup_logging, output_to_loggers
-from .utils import get_date, parse_g2t
+from .utils import get_date
 
 
 CONSOLE, CHECK = setup_logging("check")
@@ -12,7 +12,7 @@ CONSOLE, CHECK = setup_logging("check")
 
 def check_db(
     files: dict, session, meta, panelapp_dict: dict, superpanel_dict: dict,
-    gene_dict: dict, nirvana_data: dict, ci2targets: dict
+    gene_dict: dict, g2t_data: dict, ci2targets: dict
 ):
     """ Check that the data in the panelapp dump is the same as what's in the
     db
@@ -24,7 +24,7 @@ def check_db(
         panelapp_dict (dict): Dict of panelapp dump data for panel
         superpanel_dict (dict): Dict of panelapp dump data for superpanel
         gene_dict (dict): Dict of gene data from panelapp
-        nirvana_data (dict): Dict of nirvana transcript data
+        g2t_data (dict): Dict of genes2transcript data
         ci2targets (dict): Dict of clinical indication data from the national
                             test directory
 
@@ -74,11 +74,8 @@ def check_db(
             error_detected = True
             CHECK.error(error)
 
-    g2t_data = parse_g2t(files["g2t"])
-
     g2t_errors = check_g2t(
-        session, gene_dict, nirvana_data, g2t_data, gene_tb, g2t_tb,
-        transcript_tb
+        session, gene_dict, g2t_data, gene_tb, g2t_tb, transcript_tb
     )
 
     for error in g2t_errors:
@@ -545,15 +542,13 @@ def check_feature_type(
 
 
 def check_g2t(
-    session, gene_dict: dict, nirvana_data: dict, g2t_data: dict, gene_tb,
-    g2t_tb, transcript_tb
+    session, gene_dict: dict, g2t_data: dict, gene_tb, g2t_tb, transcript_tb
 ):
     """ Check the transcripts
 
     Args:
         session (SQLAlchemy session obj): SQLAlchemy session obj
         gene_dict (dict): Dict of genes from panelapp
-        nirvana_data (dict): Dict of nirvana transcript data
         g2t_data (dict): Dict of g2t data from g2t file
         gene_tb: SQL Alchemy queryable table for genes
         g2t_tb: SQL Alchemy queryable table for genes2transcripts
@@ -566,7 +561,7 @@ def check_g2t(
     error_log = []
 
     for hgnc_id in gene_dict:
-        all_transcripts = nirvana_data[hgnc_id]
+        all_transcripts = g2t_data[hgnc_id]
 
         # get the genes2transcripts for the hgnc id
         db_g2t = session.query(g2t_tb).join(gene_tb).filter(
@@ -602,7 +597,9 @@ def check_g2t(
             ).one()
 
             # get the transcript data from the nirvana/hgmd dumps
-            tx_data = all_transcripts[f"{refseq_base}.{version}"]
+            (
+                clinical_status, canonical_status
+            ) = all_transcripts[f"{refseq_base}.{version}"]
 
             if canonical == 0:
                 canonical = False
@@ -612,7 +609,20 @@ def check_g2t(
                 canonical = None
 
             if db_clinical_transcript:
-                clinical_transcript = g2t_data[hgnc_id]
+                try:
+                    clinical_transcript = [
+                        tx
+                        for tx in g2t_data[hgnc_id]
+                        if g2t_data[hgnc_id][tx][0] is True
+                    ][0]
+                except IndexError as e:
+                    msg = (
+                        f"{hgnc_id} has no clinical_transcript"
+                    )
+                    error_log.append(msg)
+                    debug = g2t_data[hgnc_id]
+                    error_log.append(debug)
+                    continue
 
                 if f"{refseq_base}.{version}" != clinical_transcript:
                     msg = (
@@ -623,10 +633,10 @@ def check_g2t(
                     error_log.append(msg)
 
             # check if the attributes are correct
-            if tx_data["canonical"] != canonical:
+            if canonical_status != canonical:
                 msg = (
                     f"{hgnc_id}, {refseq_base}.{version}: Canonical status "
-                    f"between db ({tx_data['canonical']}) and dump "
+                    f"between dump ({canonical_status}) and db "
                     f"({canonical}) are not equal"
                 )
                 error_log.append(msg)
