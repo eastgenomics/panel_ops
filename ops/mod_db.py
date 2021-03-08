@@ -15,7 +15,6 @@ from django.core import management
 from django.core.management.commands import loaddata
 from django.apps import apps
 
-
 CONSOLE, MOD_DB = setup_logging("mod_db")
 
 
@@ -59,9 +58,7 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
     output_to_loggers(msg, CONSOLE, MOD_DB)
 
     # Parse the hgnc data dump
-    hgnc_data, symbol_dict, alias_dict, prev_dict = parse_hgnc_dump(
-        path_to_hgnc_dump
-    )
+    hgnc_data = parse_hgnc_dump(path_to_hgnc_dump)
 
     # Get the hgnc model table using the date
     hgnc_new = apps.get_model(
