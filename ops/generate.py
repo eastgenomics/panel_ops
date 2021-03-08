@@ -97,7 +97,7 @@ def generate_genepanels(session, meta):
     for pk, panel_version, description, feature_id, panel_id in session.query(
         panel2features_tb
     ):
-        gene_panels[panel_id][panel_version].append(feature_id)
+        gene_panels[panel_id][float(panel_version)].append(feature_id)
 
     # we want a pretty file so store the data in a nice way
     output_data = set()
@@ -108,7 +108,7 @@ def generate_genepanels(session, meta):
         # get the latest version of a panel. i don't really have a clean way
         # to specify specific panel versions to get
         panel_versions = [float(version) for version in gene_panels[panel_id]]
-        latest_version = str(max(panel_versions))
+        latest_version = float(max(panel_versions))
 
         for feature_id in gene_panels[panel_id][latest_version]:
             output_data.add(
