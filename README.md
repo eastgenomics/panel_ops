@@ -57,5 +57,3 @@ python main.py mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date
 ## What does this output?
 
 Panelapp dump of the day, django fixtures, sql dumps...
-
-### This was made by EMEE GLH
