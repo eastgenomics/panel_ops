@@ -12,52 +12,48 @@ Checking database data, checking tests against Test directory, checking gene tra
 
 Python > 3.6
 
-Database called panel_database
+- Database called panel_database
 
 <p align="center">
     <img height="100%" width="100%" src="panel_database_schema.png">
 </p>
 
-From https://github.com/PyMySQL/mysqlclient-python :
+- From https://github.com/PyMySQL/mysqlclient-python :
 >Linux  
 Note that this is a basic step. I can not support complete step for build for all environment. If you can see some error, you should fix it by yourself, or ask for support in some user forum. Don't file a issue on the issue tracker.  
 You may need to install the Python 3 and MySQL development headers and libraries like so:  
     &nbsp;&nbsp;&nbsp;&nbsp;$ sudo apt-get install python3-dev default-libmysqlclient-dev build-essential # Debian / Ubuntu  
     &nbsp;&nbsp;&nbsp;&nbsp;% sudo yum install python3-devel mysql-devel # Red Hat / CentOS
 
-Python packages specified in the requirements.txt
+- Python packages specified in the requirements.txt
 
 Usage:
 
-```python3
-source /panels/panel_env/bin/activate
+```bash
+source /home/panels/panel_env/bin/activate
 
 # output all panelapp panels in folder ${day}_panelapp_dump
-python main.py generate -all National_test_directory.xls
+python main.py generate -all 
 # output gms panelapp panels in folder ${day}_panelapp_dump
-python main.py generate -gms National_test_directory.xls
+python main.py generate -gms 
 
 # output django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
-python main.py generate -j 201020_panelapp_dump National_test_directory.xls 
+python main.py -t ${national_test_directory_xls} generate -j panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
-# output sql_dump/${day}_genepanels.tsv
-python main.py generate -g National_test_directory.xls
-# output sql_dump/${day}_gemini_names.txt
-python main.py generate -gd National_test_directory.xls
 # output sql_dump/${day}_genepanels.txt
-python main.py generate -gp National_test_directory.xls
+python main.py generate -gp 
 # output sql_dump/${day}_sample2genes.tsv
-python main.py generate -m gemini_dump National_test_directory.xls
+python main.py generate -m manifest.csv
 
 # check db structure against panelapp dump
-python main.py check panelapp_dump 201020_panelapp_dump National_test_directory.xls
+python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
 # import the data in the database
-python main.py mod_db -i django_fixtures/${day}/${day}_json_dump.json
+python main.py mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
+# import hgnc data
+python main.py mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
 ```
 
 ## What does this output?
 
 Panelapp dump of the day, django fixtures, sql dumps...
-
-### This was made by EMEE GLH
