@@ -1,14 +1,13 @@
 from collections import defaultdict
 import json
-from pathlib import Path
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, write_new_output_folder, parse_gemini_dump, create_panelapp_dict,
-    gather_ref_django_json, gather_panel_types_django_json,
-    gather_feature_types_django_json, gather_panel_data_django_json,
-    gather_superpanel_data_django_json, gather_transcripts,
-    gather_clinical_indication_data_django_json
+    get_date, write_new_output_folder, parse_gemini_dump, filter_out_gene,
+    create_panelapp_dict, gather_ref_django_json,
+    gather_panel_types_django_json, gather_feature_types_django_json,
+    gather_panel_data_django_json, gather_superpanel_data_django_json,
+    gather_transcripts, gather_clinical_indication_data_django_json
 )
 
 
@@ -59,7 +58,7 @@ def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
     return output_folder
 
 
-def generate_genepanels(session, meta):
+def generate_genepanels(session, meta, hgnc_data: dict):
     """ Generate gene panels file
 
     Args:
@@ -111,8 +110,18 @@ def generate_genepanels(session, meta):
         latest_version = float(max(panel_versions))
 
         for feature_id in gene_panels[panel_id][latest_version]:
+            hgnc_id = genes[feature_id]
+
+            if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                continue
+
+            if filter_out_gene(
+                hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+            ):
+                continue
+
             output_data.add(
-                (panel_name, str(latest_version), genes[feature_id])
+                (panel_name, str(latest_version), hgnc_id)
             )
 
     # sort the data using panel names and genes
@@ -243,7 +252,7 @@ def generate_django_jsons(
     return output_folder
 
 
-def generate_manifest(session, meta, gemini_dump: str):
+def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     """ Generate new bioinformatic manifest for the new database
 
     Args:
@@ -296,7 +305,20 @@ def generate_manifest(session, meta, gemini_dump: str):
         ).all()
 
         genes = [data[2] for data in gene_for_panel]
-        gemini2genes[gemini_name].update(genes)
+        hgnc_ids = []
+
+        for hgnc_id in genes:
+            if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                continue
+
+            if filter_out_gene(
+                hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+            ):
+                continue
+
+            hgnc_ids.append(hgnc_id)
+
+        gemini2genes[gemini_name].update(hgnc_ids)
 
     # we want a pretty file so store the data that we want to output in a nice
     # way
