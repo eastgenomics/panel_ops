@@ -38,6 +38,7 @@ def parse_args():
     )
 
     parser.add_argument("-t", "--test_xls", help="NHS test directory")
+    parser.add_argument("-hgnc", "--hgnc", help="HGNC dump file")
 
     subparser = parser.add_subparsers(dest="command")
 
@@ -67,7 +68,7 @@ def parse_args():
         "-gp", "--genepanels", action="store_true",
         help="Generate genepanels"
     )
-    generate.add_argument("-m", "--manifest", help="Gemini database xls dump")
+    generate.add_argument("-m", "--manifest", help="Gemini database csv dump")
 
     check = subparser.add_parser("check")
     check.add_argument(
@@ -112,6 +113,10 @@ def main(**param):
         # get the single genes in the test directory to transform them into
         # single gene panels
         single_genes = ops.utils.gather_single_genes(clean_clinind_data)
+
+    if param["hgnc"]:
+        # parse hgnc file
+        hgnc_data = ops.utils.parse_hgnc_dump(param["hgnc"])
 
     # Check which subparser is being used
     if param["command"] == "check":
@@ -161,15 +166,6 @@ def main(**param):
                 gms_panels, "GMS"
             )
 
-        # Generate a bioinformatic manifest type file for reports
-        if param["manifest"]:
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
-            sample2panels = ops.generate.generate_manifest(
-                session, meta, param["manifest"]
-            )
-
         # Generate django fixture using given panelapp dump
         if param["json"]:
             assert clean_clinind_data is not None, (
@@ -204,10 +200,25 @@ def main(**param):
 
         # Generate genepanels file from database
         if param["genepanels"]:
+            assert hgnc_data is not None, (
+                "-hgnc option is needed for genepanels cmd"
+            )
             session, meta = ops.utils.connect_to_db(
                 user, passwd, host, "panel_database"
             )
-            ops.generate.generate_genepanels(session, meta)
+            ops.generate.generate_genepanels(session, meta, hgnc_data)
+
+        # Generate a bioinformatic manifest type file for reports
+        if param["manifest"]:
+            assert hgnc_data is not None, (
+                "-hgnc option is needed for manifest cmd"
+            )
+            session, meta = ops.utils.connect_to_db(
+                user, passwd, host, "panel_database"
+            )
+            sample2panels = ops.generate.generate_manifest(
+                session, meta, param["manifest"], hgnc_data
+            )
 
     elif param["command"] == "mod_db":
         # check if the credentials for panel admin are correct
