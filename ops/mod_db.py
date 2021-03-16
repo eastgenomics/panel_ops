@@ -30,7 +30,7 @@ def import_django_fixture(path_to_json: str):
     """
 
     msg = f"Importing data using json: '{path_to_json}'"
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     try:
         # Call the loaddata cmd --> python manage.py loaddata path_to_json
@@ -40,7 +40,7 @@ def import_django_fixture(path_to_json: str):
         raise e
     else:
         msg = f"Import of data using '{path_to_json}' successful"
-        output_to_loggers(msg, CONSOLE, MOD_DB)
+        output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
 
 def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
@@ -55,7 +55,7 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
         f"Importing data using: '{path_to_hgnc_dump}' and looking for "
         f"table using {date} --> hgnc_{date}"
     )
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     # Parse the hgnc data dump
     hgnc_data = parse_hgnc_dump(path_to_hgnc_dump)
@@ -94,4 +94,4 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
         f"Finished importing data using: '{path_to_hgnc_dump}' in "
         f"hgnc_current and  hgnc_{date}"
     )
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)

@@ -36,7 +36,7 @@ def check_db(
     """
 
     msg = f"Checking database against {', '.join(files.values())}"
-    output_to_loggers(msg, CONSOLE, CHECK)
+    output_to_loggers(msg, "info", CONSOLE, CHECK)
 
     # setup the gathering of data from the following tables
     ci_tb = meta.tables["clinical_indication"]
@@ -102,7 +102,7 @@ def check_db(
             f"Checking panels from {', '.join(files.values())} "
             f"against database on {get_date()}: correct"
         )
-        output_to_loggers(msg, CONSOLE, CHECK)
+        output_to_loggers(msg, "info", CONSOLE, CHECK)
 
     return True
 
