@@ -95,7 +95,7 @@ def setup_logging(type_logger):
     return logging.getLogger("normal_ops"), logging.getLogger(type_logger)
 
 
-def output_to_loggers(msg: str, *loggers):
+def output_to_loggers(msg: str, level: str, *loggers):
     """ Add msgs to the all the loggers given
 
     Args:
@@ -103,4 +103,7 @@ def output_to_loggers(msg: str, *loggers):
     """
 
     for logger in loggers:
-        logger.info(msg)
+        if level == "info":
+            logger.info(msg)
+        elif level == "warning":
+            logger.warning(msg)
