@@ -565,6 +565,63 @@ def parse_gemini_dump(gemini_dump: str):
     return OrderedDict(sorted(sample2panels.items(), key=lambda t: t[0]))
 
 
+def find_hgnc_id(session, hgnc_tb, gene_symbol: str):
+    """ Find the hgnc id from the given hgnc table using a gene symbol
+
+    Args:
+        session (SQLAlchemy session): SQLAlchemy session
+        hgnc_tb (SQLAlchemy table): SQLAlchemy table of the hgnc table
+        gene_symbol (str): Gene symbol
+
+    Returns:
+        str: HGNC id or placeholder
+    """
+
+    # try and find the symbol in the approved symbol column
+    hgnc_id = session.query(hgnc_tb.c.hgnc_id).filter(
+        hgnc_tb.c.approved_symbol == gene_symbol
+    ).one_or_none()
+
+    rows = None
+
+    # use alias and previous symbols for symbols for finding the hgnc ids
+    if not hgnc_id:
+        like_symbol = f"%{gene_symbol}%"
+        rows = session.query(
+            hgnc_tb.c.hgnc_id, hgnc_tb.c.alias_symbols
+        ).filter(
+            hgnc_tb.c.alias_symbols.like(like_symbol) |
+            hgnc_tb.c.previous_symbols.like(like_symbol)
+        ).all()
+
+    # check if we used alias and previous symbols
+    if isinstance(rows, list):
+        if len(rows) > 1:
+            # if the gene symbol is not straight forward
+            hgnc_id = f"{gene_symbol}_to_review"
+        else:
+            hgnc_id = None
+
+            # go through the one row
+            for row in rows:
+                hgnc_tb_id, symbols = row
+
+                # go through the comma separated symbols
+                for symbol in symbols.split(", "):
+                    if symbol == gene_symbol:
+                        # break the loop when you find an exact match
+                        hgnc_id = hgnc_tb_id
+                        break
+
+    if not hgnc_id:
+        hgnc_id = f"{gene_symbol}_to_review"
+    else:
+        if isinstance(hgnc_id, tuple):
+            hgnc_id = hgnc_id[0]
+
+    return hgnc_id
+
+
 def get_django_json(model: str, pk: str, fields: dict):
     """ Return understandable django json
 
