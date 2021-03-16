@@ -513,7 +513,7 @@ def clean_targets(clinind_data: dict):
                 ci_to_remove.remove(test_code)
 
             msg = f"{test_code} is added as a hardcoded test"
-            output_to_loggers(msg, CONSOLE, UTILS)
+            output_to_loggers(msg, "info", CONSOLE, UTILS)
             clean_clinind_data[test_code]["panels"] = hd_tests[test_code]["panels"]
             clean_clinind_data[test_code]["gemini_name"] = hd_tests[test_code]["gemini_name"]
             clean_clinind_data[test_code]["tests"] = hd_tests[test_code]["tests"]

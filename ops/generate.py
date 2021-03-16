@@ -26,7 +26,7 @@ def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
     """
 
     msg = f"Creating '{type_panel}' panelapp dump"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     # name of the main folder
     output_dump = f"{type_panel}_panelapp_dump"
@@ -53,7 +53,7 @@ def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
             panel.write(output_folder)
 
     msg = f"Created panelapp dump: {output_folder}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     return output_folder
 
@@ -70,7 +70,7 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     """
 
     msg = "Creating genepanels file"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     panels = {}
     gene_panels = defaultdict(lambda: defaultdict(list))
@@ -136,7 +136,7 @@ def generate_genepanels(session, meta, hgnc_data: dict):
             f.write(f"{data}\n")
 
     msg = f"Created genepanels file: {output_file}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     return output_file
 
@@ -164,7 +164,7 @@ def generate_django_jsons(
     """
 
     msg = "Gathering data from panel dumps"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     (
         panelapp_dict, superpanel_dict, gene_dict
@@ -220,7 +220,7 @@ def generate_django_jsons(
     }
 
     msg = "Writing data in json files for django import"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     today = get_date()
     all_elements = []
@@ -247,7 +247,7 @@ def generate_django_jsons(
             json.dump(data, f, indent=4)
 
     msg = f"Created json dump for django import: {output_folder}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     return output_folder
 
@@ -266,7 +266,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     """
 
     msg = "Creating bioinformatic manifest file"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     # get the content of the gemini dump
     sample2gm_panels = parse_gemini_dump(gemini_dump)
@@ -349,6 +349,6 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
             f.write(f"{data}\n")
 
     msg = f"Created sample2panels file: {output_file}"
-    output_to_loggers(msg, CONSOLE, GENERATION)
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     return output_file
