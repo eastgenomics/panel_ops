@@ -341,7 +341,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
                 if panel.startswith("_"):
                     gene = clinical_indication.strip("_")
                     # match format of the bioinformatic manifest
-                    output_data.add((sample, f"_{gene}", "NA", gene))
+                    output_data.add((sample, f"_{gene}", f"_{gene}", gene))
 
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
