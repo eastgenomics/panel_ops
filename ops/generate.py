@@ -269,7 +269,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     output_to_loggers(msg, CONSOLE, GENERATION)
 
     # get the content of the gemini dump
-    sample2gm_panels = parse_gemini_dump(gemini_dump)
+    sample2gemini_name = parse_gemini_dump(gemini_dump)
 
     # get the panels/genes from the db now
     ci_tb = meta.tables["clinical_indication"]
@@ -281,7 +281,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
 
     uniq_used_panels = set([
         panel
-        for ele in sample2gm_panels.values()
+        for ele in sample2gemini_name.values()
         for panel in ele
     ])
 
@@ -292,7 +292,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
         ci_tb.c.gemini_name.in_(uniq_used_panels)
     ).all()
 
-    gemini2genes = defaultdict(lambda: set())
+    gemini2genes = defaultdict(lambda: defaultdict(lambda: set()))
 
     for ci in ci_in_manifest:
         gemini_name, panel_id = ci
@@ -304,10 +304,10 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
             panel2features_tb.c.panel_id == panel_id
         ).all()
 
-        genes = [data[2] for data in gene_for_panel]
+        panel_genes = [(data[0], data[2]) for data in gene_for_panel]
         hgnc_ids = []
 
-        for hgnc_id in genes:
+        for panel, hgnc_id in panel_genes:
             if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
                 continue
 
@@ -318,24 +318,30 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
 
             hgnc_ids.append(hgnc_id)
 
-        gemini2genes[gemini_name].update(hgnc_ids)
+        gemini2genes[gemini_name][panel].update(hgnc_ids)
 
     # we want a pretty file so store the data that we want to output in a nice
     # way
     output_data = set()
 
-    for sample, panels in sample2gm_panels.items():
-        for panel in panels:
+    for sample, clinical_indications in sample2gemini_name.items():
+        for clinical_indication in clinical_indications:
             # match gemini names from the dump to the genes in the db
-            if panel in gemini2genes:
-                for gene in gemini2genes[panel]:
-                    # match format of the bioinformatic manifest
-                    output_data.add((sample, panel, "NA", gene))
+            if clinical_indication in gemini2genes:
+                for panel in gemini2genes[clinical_indication]:
+                    genes = gemini2genes[clinical_indication][panel]
+
+                    for gene in genes:
+                        # match format of the bioinformatic manifest
+                        output_data.add(
+                            (sample, clinical_indication, panel, gene)
+                        )
             else:
-                if panel.startswith("_"):
-                    gene = panel.strip("_")
+                # check if it is a single gene panel
+                if clinical_indication.startswith("_"):
+                    gene = clinical_indication.strip("_")
                     # match format of the bioinformatic manifest
-                    output_data.add((sample, f"_{gene}", "NA", gene))
+                    output_data.add((sample, f"_{gene}", f"_{gene}", gene))
 
     # and sort it using sample id and the gene symbol
     sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
