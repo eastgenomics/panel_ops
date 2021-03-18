@@ -338,7 +338,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
                         )
             else:
                 # check if it is a single gene panel
-                if panel.startswith("_"):
+                if clinical_indication.startswith("_"):
                     gene = clinical_indication.strip("_")
                     # match format of the bioinformatic manifest
                     output_data.add((sample, f"_{gene}", f"_{gene}", gene))
