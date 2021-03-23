@@ -114,7 +114,7 @@ def main(**param):
         # single gene panels
         single_genes = ops.utils.gather_single_genes(clean_clinind_data)
 
-    if param["hgnc"]:
+    if param["hgnc"] and not isinstance(param["hgnc"], list):
         # parse hgnc file
         hgnc_data = ops.utils.parse_hgnc_dump(param["hgnc"])
 
