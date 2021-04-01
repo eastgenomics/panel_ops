@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 
@@ -5,7 +6,7 @@ import django
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
-from .utils import parse_hgnc_dump
+from .utils import get_date, parse_hgnc_dump, parse_g2t
 
 sys.path.append(path_to_panel_palace)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "panel_palace.settings")
@@ -14,6 +15,7 @@ django.setup()
 from django.core import management
 from django.core.management.commands import loaddata
 from django.apps import apps
+from panel_database.models import Genes2transcripts
 
 CONSOLE, MOD_DB = setup_logging("mod_db")
 
@@ -93,5 +95,63 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
     msg = (
         f"Finished importing data using: '{path_to_hgnc_dump}' in "
         f"hgnc_current and  hgnc_{date}"
+    )
+    output_to_loggers(msg, CONSOLE, MOD_DB)
+
+
+def import_new_g2t(path_to_g2t_file: str):
+    """ Import new genes2transcripts file to update tables in the database
+    It changes the clinical status and the date attribute of the g2t table
+
+    Args:
+        path_to_g2t_file (str): Path to the genes2transcripts file to import
+    """
+
+    msg = f"Importing new g2t using: '{path_to_g2t_file}'"
+    output_to_loggers(msg, CONSOLE, MOD_DB)
+
+    date = datetime.date.today()
+
+    g2t_data = parse_g2t(path_to_g2t_file)
+    g2t_rows = Genes2transcripts.objects.all()
+
+    for gene in g2t_data:
+        for transcript, statuses in g2t_data[gene].items():
+            refseq, version = transcript.split(".")
+            clinical, canonical = statuses
+
+            filter_dict = {
+                "gene__hgnc_id": gene,
+                "transcript__refseq_base": refseq,
+                "transcript__version": version,
+                "transcript__canonical": canonical
+            }
+
+            row = g2t_rows.filter(**filter_dict)
+
+            if row:
+                clinical_transcript = row.values_list(
+                    "clinical_transcript", flat=True
+                ).get()
+
+                if clinical_transcript != clinical:
+                    msg = (
+                        "Updating genes2transcripts row "
+                        f"'{row.values('id').get()}' - Clinical status goes "
+                        f"from {clinical_transcript} to {clinical}, updating "
+                        "date as well"
+                    )
+                    output_to_loggers(msg, CONSOLE, MOD_DB)
+                    row.update(clinical_transcript=clinical, date=date)
+            else:
+                msg = (
+                    f"Couldn't find object using '{gene}', '{transcript}', "
+                    f"clinical_status '{clinical}', canonical_status "
+                    f"'{canonical}'"
+                )
+                output_to_loggers(msg, CONSOLE, MOD_DB)
+
+    msg = (
+        f"Finished importing new g2t data using: '{path_to_g2t_file}'"
     )
     output_to_loggers(msg, CONSOLE, MOD_DB)
