@@ -94,6 +94,7 @@ def parse_args():
             "hgnc=file date=yymmdd"
         )
     )
+    mod_db.add_argument("-g2t", "--g2t", help="Import new g2t file in the database")
 
     args = vars(parser.parse_args())
 
@@ -237,6 +238,9 @@ def main(**param):
                     for ele in param["hgnc"]
                 }
                 ops.mod_db.import_hgnc_dump(args["hgnc"], args["date"])
+
+            if param["g2t"]:
+                ops.mod_db.import_new_g2t(param["g2t"])
 
 
 if __name__ == "__main__":
