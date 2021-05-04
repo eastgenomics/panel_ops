@@ -313,28 +313,40 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     for ci in ci_in_manifest:
         gemini_name, panel_id = ci
 
+        # get the latest version of a given panel
+        latest_version = session.query(
+            func.max(panel2features_tb.c.panel_version)
+        ).filter(
+            panel2features_tb.c.panel_id == panel_id
+        ).one()[0]
+
         # query to get all genes from a panel id
         gene_for_panel = session.query(
-            panel_tb.c.name, panel2features_tb.c.feature_id, gene_tb.c.hgnc_id
+            panel_tb.c.name, panel2features_tb.c.feature_id,
+            panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
         ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
             panel2features_tb.c.panel_id == panel_id
         ).all()
 
-        panel_genes = [(data[0], data[2]) for data in gene_for_panel]
+        panel_genes = [(data[0], data[2], data[3]) for data in gene_for_panel]
         hgnc_ids = []
 
-        for panel, hgnc_id in panel_genes:
-            if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
-                continue
+        for panel, panel_version, hgnc_id in panel_genes:
+            # only get genes that are in the latest version of a given panel
+            if panel_version == latest_version:
+                # filter gene if it's RNA
+                if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                    continue
 
-            if filter_out_gene(
-                hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
-            ):
-                continue
+                # get rid of mitochondrial genes
+                if filter_out_gene(
+                    hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+                ):
+                    continue
 
-            hgnc_ids.append(hgnc_id)
+                hgnc_ids.append(hgnc_id)
 
-        gemini2genes[gemini_name][panel].update(hgnc_ids)
+        gemini2genes[gemini_name][f"{panel}_{float(latest_version)}"].update(hgnc_ids)
 
     # we want a pretty file so store the data that we want to output in a nice
     # way
