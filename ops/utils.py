@@ -1,9 +1,9 @@
 from collections import defaultdict, OrderedDict
 import datetime
-import gzip
 import os
 from pathlib import Path
 
+from packaging import version
 import regex
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -1184,3 +1184,50 @@ def gather_single_genes(clin_ind2targets: dict):
             single_genes += genes
 
     return single_genes
+
+
+def get_clinical_indication_through_genes(
+    session, meta, clinical_indications, hgnc_data
+):
+    panel_tb = meta.tables["panel"]
+    panel2features_tb = meta.tables["panel_features"]
+    feature_tb = meta.tables["feature"]
+    gene_tb = meta.tables["gene"]
+
+    gemini2genes = defaultdict(lambda: defaultdict(lambda: set()))
+
+    for ci in clinical_indications:
+        gemini_name, panel_id = ci
+
+        # query to get all genes from a panel id
+        data = session.query(
+            panel_tb.c.name, panel2features_tb.c.feature_id,
+            panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
+        ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
+            panel2features_tb.c.panel_id == panel_id
+        ).all()
+
+        # use the packaging package to parse the version and take the latest
+        # version
+        latest_version = max([version.parse(d[2]) for d in data])
+        panel_genes = [(d[0], d[2], d[3]) for d in data]
+        hgnc_ids = []
+
+        for panel, panel_version, hgnc_id in panel_genes:
+            # only get genes that are in the latest version of a given panel
+            if panel_version == latest_version:
+                # filter gene if it's RNA
+                if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                    continue
+
+                # get rid of mitochondrial genes
+                if filter_out_gene(
+                    hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+                ):
+                    continue
+
+                hgnc_ids.append(hgnc_id)
+
+        gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
+
+    return gemini2genes
