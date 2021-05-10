@@ -450,9 +450,7 @@ def clean_targets(clinind_data: dict):
             clean_clinind_data[test_code]["method"] = "P"
 
         elif "panel" in method:
-            match = regex.search(r"(.*)[pP]anel", method)
-            type_panel = match.groups()[0][0]
-            clean_clinind_data[test_code]["method"] = f"{type_panel}P"
+            clean_clinind_data[test_code]["method"] = "P"
 
         elif "gene" in method:
             clean_clinind_data[test_code]["method"] = "G"
