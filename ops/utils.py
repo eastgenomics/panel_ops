@@ -1189,6 +1189,19 @@ def gather_single_genes(clin_ind2targets: dict):
 def get_clinical_indication_through_genes(
     session, meta, clinical_indications, hgnc_data
 ):
+    """ Loop through given clinical indications database rows and get linked
+        panels
+
+    Args:
+        session (SQLAlchemy Session): SQLAlchemy Session
+        meta (SQLAlchemy Meta): SQLAlchemy Meta
+        clinical_indications: rows of SQLAlchemy data from the clinical indications table
+        hgnc_data (dict): Dict of parsed hgnc data from an HGNC dump
+
+    Returns:
+        dict: dict of clinical indications to dict of panels to genes
+    """
+
     panel_tb = meta.tables["panel"]
     panel2features_tb = meta.tables["panel_features"]
     feature_tb = meta.tables["feature"]
