@@ -1228,7 +1228,7 @@ def get_clinical_indication_through_genes(
 
         for panel, panel_version, hgnc_id in panel_genes:
             # only get genes that are in the latest version of a given panel
-            if panel_version == latest_version:
+            if version.parse(str(panel_version)) == latest_version:
                 # filter gene if it's RNA
                 if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
                     continue
