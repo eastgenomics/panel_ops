@@ -1,4 +1,3 @@
-from collections import defaultdict
 import json
 
 from .logger import setup_logging, output_to_loggers
@@ -7,7 +6,8 @@ from .utils import (
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
-    gather_transcripts, gather_clinical_indication_data_django_json
+    gather_transcripts, gather_clinical_indication_data_django_json,
+    get_clinical_indication_through_genes
 )
 
 
@@ -72,60 +72,32 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     msg = "Creating genepanels file"
     output_to_loggers(msg, CONSOLE, GENERATION)
 
-    panels = {}
-    gene_panels = defaultdict(lambda: defaultdict(list))
     genes = {}
 
-    panel_tb = meta.tables["panel"]
-    panel2features_tb = meta.tables["panel_features"]
-    feature_tb = meta.tables["feature"]
-    gene_tb = meta.tables["gene"]
+    ci_tb = meta.tables["clinical_indication"]
+    ci2panels_tb = meta.tables["clinical_indication_panels"]
 
-    # query database to get all panels
-    for panel_row in session.query(panel_tb):
-        panel_id, panelapp_id, name, panel_type = panel_row
-        panels[panel_id] = name
+    # get the gemini names and associated genes and panels ids
+    cis = session.query(
+        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
+    ).join(ci2panels_tb).all()
 
-    # query database to get all genes
-    for feature_id, hgnc_id in session.query(
-        feature_tb.c.id, gene_tb.c.hgnc_id
-    ).join(gene_tb):
-        genes[feature_id] = hgnc_id
-
-    # query database to get all panel2genes links
-    for pk, panel_version, description, feature_id, panel_id in session.query(
-        panel2features_tb
-    ):
-        gene_panels[panel_id][float(panel_version)].append(feature_id)
+    gemini2genes = get_clinical_indication_through_genes(
+        session, meta, cis, hgnc_data
+    )
 
     # we want a pretty file so store the data in a nice way
     output_data = set()
 
-    for panel_id, panel_data in panels.items():
-        panel_name = panel_data
-
-        # get the latest version of a panel. i don't really have a clean way
-        # to specify specific panel versions to get
-        panel_versions = [float(version) for version in gene_panels[panel_id]]
-        latest_version = float(max(panel_versions))
-
-        for feature_id in gene_panels[panel_id][latest_version]:
-            hgnc_id = genes[feature_id]
-
-            if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
-                continue
-
-            if filter_out_gene(
-                hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
-            ):
-                continue
-
-            output_data.add(
-                (panel_name, str(latest_version), hgnc_id)
-            )
+    for ci, panel_data in gemini2genes.items():
+        for panel, genes in panel_data.items():
+            for gene in genes:
+                output_data.add(
+                    (ci, panel, gene)
+                )
 
     # sort the data using panel names and genes
-    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[2]))
+    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[1], x[2]))
 
     output_folder = write_new_output_folder("sql_dump", "genepanels")
     output_file = f"{output_folder}/{get_date()}_genepanels.tsv"
@@ -274,10 +246,6 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     # get the panels/genes from the db now
     ci_tb = meta.tables["clinical_indication"]
     ci2panels_tb = meta.tables["clinical_indication_panels"]
-    panel_tb = meta.tables["panel"]
-    panel2features_tb = meta.tables["panel_features"]
-    feature_tb = meta.tables["feature"]
-    gene_tb = meta.tables["gene"]
 
     uniq_used_panels = set([
         panel
@@ -292,33 +260,9 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
         ci_tb.c.gemini_name.in_(uniq_used_panels)
     ).all()
 
-    gemini2genes = defaultdict(lambda: defaultdict(lambda: set()))
-
-    for ci in ci_in_manifest:
-        gemini_name, panel_id = ci
-
-        # query to get all genes from a panel id
-        gene_for_panel = session.query(
-            panel_tb.c.name, panel2features_tb.c.feature_id, gene_tb.c.hgnc_id
-        ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
-            panel2features_tb.c.panel_id == panel_id
-        ).all()
-
-        panel_genes = [(data[0], data[2]) for data in gene_for_panel]
-        hgnc_ids = []
-
-        for panel, hgnc_id in panel_genes:
-            if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
-                continue
-
-            if filter_out_gene(
-                hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
-            ):
-                continue
-
-            hgnc_ids.append(hgnc_id)
-
-        gemini2genes[gemini_name][panel].update(hgnc_ids)
+    gemini2genes = get_clinical_indication_through_genes(
+        session, meta, ci_in_manifest, hgnc_data
+    )
 
     # we want a pretty file so store the data that we want to output in a nice
     # way
