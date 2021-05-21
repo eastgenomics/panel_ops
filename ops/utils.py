@@ -1239,6 +1239,10 @@ def get_clinical_indication_through_genes(
                 ):
                     continue
 
+                # remove TRAC and IGHM genes from genepanels and manifest
+                if hgnc_id in ["HGNC:12029", "HGNC:5541"]:
+                    continue
+
                 hgnc_ids.append(hgnc_id)
 
         gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
