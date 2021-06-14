@@ -15,7 +15,7 @@ django.setup()
 from django.core import management
 from django.core.management.commands import loaddata
 from django.apps import apps
-from panel_database.models import Genes2transcripts
+from panel_database.models import Genes2transcripts, Gene, Transcript, Feature
 
 CONSOLE, MOD_DB = setup_logging("mod_db")
 
@@ -32,7 +32,7 @@ def import_django_fixture(path_to_json: str):
     """
 
     msg = f"Importing data using json: '{path_to_json}'"
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     try:
         # Call the loaddata cmd --> python manage.py loaddata path_to_json
@@ -42,7 +42,7 @@ def import_django_fixture(path_to_json: str):
         raise e
     else:
         msg = f"Import of data using '{path_to_json}' successful"
-        output_to_loggers(msg, CONSOLE, MOD_DB)
+        output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
 
 def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
@@ -57,7 +57,7 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
         f"Importing data using: '{path_to_hgnc_dump}' and looking for "
         f"table using {date} --> hgnc_{date}"
     )
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     # Parse the hgnc data dump
     hgnc_data = parse_hgnc_dump(path_to_hgnc_dump)
@@ -96,7 +96,7 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
         f"Finished importing data using: '{path_to_hgnc_dump}' in "
         f"hgnc_current and  hgnc_{date}"
     )
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
 
 def import_new_g2t(path_to_g2t_file: str):
@@ -108,7 +108,7 @@ def import_new_g2t(path_to_g2t_file: str):
     """
 
     msg = f"Importing new g2t using: '{path_to_g2t_file}'"
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     date = datetime.date.today()
 
@@ -116,6 +116,19 @@ def import_new_g2t(path_to_g2t_file: str):
     g2t_rows = Genes2transcripts.objects.all()
 
     for gene in g2t_data:
+        if not Gene.objects.filter(hgnc_id=gene).exists():
+            new_gene, gene_created = Gene.objects.get_or_create(
+                hgnc_id=gene
+            )
+            new_feature, feature_created = Feature.objects.get_or_create(
+                gene_id=new_gene.id, feature_type_id=1
+            )
+            msg = (
+                f"Created gene and feature for {gene}: {new_gene}, "
+                f"{new_feature}"
+            )
+            output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+
         for transcript, statuses in g2t_data[gene].items():
             refseq, version = transcript.split(".")
             clinical, canonical = statuses
@@ -137,21 +150,37 @@ def import_new_g2t(path_to_g2t_file: str):
                 if clinical_transcript != clinical:
                     msg = (
                         "Updating genes2transcripts row "
-                        f"'{row.values('id').get()}' - Clinical status goes "
-                        f"from {clinical_transcript} to {clinical}, updating "
+                        f"'{row.values('id').get()}' - Clinical status "
+                        f"{clinical_transcript} --> {clinical}, updating "
                         "date as well"
                     )
-                    output_to_loggers(msg, CONSOLE, MOD_DB)
+                    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
                     row.update(clinical_transcript=clinical, date=date)
             else:
-                msg = (
-                    f"Couldn't find object using '{gene}', '{transcript}', "
-                    f"clinical_status '{clinical}', canonical_status "
-                    f"'{canonical}'"
+                new_tx, tx_created = Transcript.objects.get_or_create(
+                    refseq_base=refseq, version=version, canonical=canonical
                 )
-                output_to_loggers(msg, CONSOLE, MOD_DB)
+                new_g2t, g2t_created = Genes2transcripts.objects.get_or_create(
+                    gene_id=new_gene.id, reference_id=1, date=date,
+                    transcript_id=new_tx.id, clinical_transcript=clinical
+                )
+
+                if not tx_created or not g2t_created:
+                    msg = (
+                        "One of the following row already existed: "
+                        f"{new_tx} {tx_created} | "
+                        f"{new_g2t} {g2t_created}."
+                        "Please check that there is no underlying issues."
+                    )
+                    output_to_loggers(msg, "warning", CONSOLE, MOD_DB)
+                else:
+                    msg = (
+                        f"The following objects have been created: {new_tx}, "
+                        f"{new_g2t}"
+                    )
+                    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
     msg = (
         f"Finished importing new g2t data using: '{path_to_g2t_file}'"
     )
-    output_to_loggers(msg, CONSOLE, MOD_DB)
+    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
