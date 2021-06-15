@@ -116,18 +116,18 @@ def import_new_g2t(path_to_g2t_file: str):
     g2t_rows = Genes2transcripts.objects.all()
 
     for gene in g2t_data:
-        if not Gene.objects.filter(hgnc_id=gene).exists():
-            new_gene, gene_created = Gene.objects.get_or_create(
-                hgnc_id=gene
-            )
-            new_feature, feature_created = Feature.objects.get_or_create(
-                gene_id=new_gene.id, feature_type_id=1
-            )
+        gene_obj, gene_created = Gene.objects.get_or_create(
+            hgnc_id=gene
+        )
+        feature, feature_created = Feature.objects.get_or_create(
+            gene_id=gene_obj.id, feature_type_id=1
+        )
+        if gene_created:
             msg = (
-                f"Created gene and feature for {gene}: {new_gene}, "
-                f"{new_feature}"
+                f"Created gene and feature for {gene}: {gene_obj}, "
+                f"{feature}"
             )
-            output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+        output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
         for transcript, statuses in g2t_data[gene].items():
             refseq, version = transcript.split(".")
