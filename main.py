@@ -14,6 +14,8 @@
 - mod_db:
     - initial_import: Import given django fixture in the database
     - hgnc: Import HGNC data dump in the database
+    - g2t: Update transcripts status/clinical transcript + new genes and
+    transcripts
 """
 
 import argparse

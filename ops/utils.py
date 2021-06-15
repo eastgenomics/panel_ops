@@ -473,7 +473,7 @@ def clean_targets(clinind_data: dict):
                 # so I remove those
                 if indiv_target.startswith("As "):
                     ci_to_remove.append(test_code)
-                    output_to_loggers(removed_msg, CONSOLE, UTILS)
+                    output_to_loggers(removed_msg, "info", CONSOLE, UTILS)
 
                 # check if the target has parentheses with numbers in there
                 match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
@@ -499,10 +499,10 @@ def clean_targets(clinind_data: dict):
                         # only case where this happens is a
                         # As dictated by clinical indication case
                         ci_to_remove.append(test_code)
-                        output_to_loggers(removed_msg, CONSOLE, UTILS)
+                        output_to_loggers(removed_msg, "info", CONSOLE, UTILS)
             else:
                 ci_to_remove.append(test_code)
-                output_to_loggers(removed_msg, CONSOLE, UTILS)
+                output_to_loggers(removed_msg, "info", CONSOLE, UTILS)
 
         # handle the hard coded tests
         if test_code in hd_tests:
@@ -511,7 +511,7 @@ def clean_targets(clinind_data: dict):
                 ci_to_remove.remove(test_code)
 
             msg = f"{test_code} is added as a hardcoded test"
-            output_to_loggers(msg, CONSOLE, UTILS)
+            output_to_loggers(msg, "info", CONSOLE, UTILS)
             clean_clinind_data[test_code]["panels"] = hd_tests[test_code]["panels"]
             clean_clinind_data[test_code]["gemini_name"] = hd_tests[test_code]["gemini_name"]
             clean_clinind_data[test_code]["tests"] = hd_tests[test_code]["tests"]
