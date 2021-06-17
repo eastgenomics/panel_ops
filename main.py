@@ -96,7 +96,12 @@ def parse_args():
             "hgnc=file date=yymmdd"
         )
     )
-    mod_db.add_argument("-g2t", "--g2t", help="Import new g2t file in the database")
+    mod_db.add_argument(
+        "-g2t", "--g2t", help="Import new g2t file in the database"
+    )
+    mod_db.add_argument(
+        "-new_panel", "--new_panel", help="Panel form xls file"
+    )
 
     args = vars(parser.parse_args())
 
@@ -243,6 +248,9 @@ def main(**param):
 
             if param["g2t"]:
                 ops.mod_db.import_new_g2t(param["g2t"])
+            
+            if param["new_panel"]:
+                ops.mod_db.import_bespoke_panel(param["new_panel"])
 
 
 if __name__ == "__main__":
