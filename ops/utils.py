@@ -1,9 +1,11 @@
 from collections import defaultdict, OrderedDict
 import datetime
 import os
+import re
 from pathlib import Path
 
 from packaging import version
+import pandas as pd
 import regex
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -1248,3 +1250,42 @@ def get_clinical_indication_through_genes(
         gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
 
     return gemini2genes
+
+
+def parse_bespoke_panel_form(panel_form: str):
+    """ Parse the bespoke panel excel form
+
+    Args:
+        panel_form (str): Excel panel form
+
+    Returns:
+        dict: Dict of dict containing data for clinical indication, panel, genes
+    """
+
+    # read in the excel sheets of interest
+    metadata_df = pd.read_excel(panel_form, sheet_name="Admin details")
+    gene_df = pd.read_excel(panel_form, sheet_name="Gene list")
+
+    # get data from hardcoded locations in the metadata sheet
+    clinical_indication = metadata_df.iat[2, 1]
+    ci_version = metadata_df.iat[8, 1].strftime("%Y-%m-%d")
+    panel = metadata_df.iat[3, 1]
+    panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+
+    # get unique hgnc ids from the gene sheet
+    genes = set(gene_df.iloc[0:, 1])
+
+    # setup the data for future use
+    data = {
+        clinical_indication: {
+            "version": ci_version,
+            "panels": {
+                panel: {
+                    "genes": genes,
+                    "version": panel_version
+                }
+            }
+        }
+    }
+
+    return data
