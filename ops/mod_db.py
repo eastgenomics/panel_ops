@@ -255,8 +255,7 @@ def import_bespoke_panel(panel_form: str):
 
                 if gene_created:
                     msg = f"Gene {new_gene.hgnc_id} created: {new_gene.id}"
-
-                output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+                    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
                 # get the gene feature type id
                 gene_feature_type_id = FeatureType.objects.get(type="gene").id
@@ -282,8 +281,7 @@ def import_bespoke_panel(panel_form: str):
 
             # create clinical indication
             new_ci, ci_created = ClinicalIndication.objects.get_or_create(
-                name=ci, version=ci_data["version"], gemini_name=gemini_name,
-                clinical_indication_id=ci_id
+                name=ci, gemini_name=gemini_name, clinical_indication_id=ci_id
             )
 
             if ci_created:
@@ -293,7 +291,8 @@ def import_bespoke_panel(panel_form: str):
 
             # create clinical indication panel link
             ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
-                clinical_indication_id=new_ci.id, panel_id=new_panel.id
+                clinical_indication_id=new_ci.id, panel_id=new_panel.id,
+                ci_version=ci_data["version"]
             )
 
     msg = f"Finished importing {panel_form}"
@@ -368,7 +367,7 @@ def check_if_ci_data_in_database(data: dict):
             # that way we get clinical indication + panel link
             ci_panels_check = ClinicalIndicationPanels.objects.filter(
                 clinical_indication__name=ci,
-                clinical_indication__version=ci_data["version"],
+                ci_version=ci_data["version"],
                 panel_id__in=panels_check
             )
 
