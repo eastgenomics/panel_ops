@@ -774,6 +774,10 @@ def gather_panel_data_django_json(
         panel_type_pk = get_existing_object_pk(
             paneltype_json, "type", panel_dict["type"]
         )
+
+        if panelapp_id.endswith("_SG"):
+            panelapp_id = ""
+
         panel_fields = {
                 "panelapp_id": panelapp_id, "name": panel_dict["name"],
                 "panel_type_id": panel_type_pk
@@ -963,7 +967,6 @@ def gather_clinical_indication_data_django_json(
             clinind_fields = {
                 "clinical_indication_id": test_code,
                 "name": name,
-                "version": version,
                 "gemini_name": gemini_name,
             }
             clinical_indication_json.append(
@@ -1038,7 +1041,8 @@ def gather_clinical_indication_data_django_json(
 
             pk_dict["clinind_panels"] += 1
             clinind_panels_fields = {
-                "clinical_indication_id": clin_ind_pk, "panel_id": panel_pk
+                "clinical_indication_id": clin_ind_pk, "panel_id": panel_pk,
+                "version": version
             }
             clinical_indication2panels_json.append(
                 get_django_json(
