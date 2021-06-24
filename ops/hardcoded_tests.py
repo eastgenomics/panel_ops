@@ -21,7 +21,7 @@ tests = {
     },
     "R266.1": {
         "tests": ["R80", "R81", "R83"],
-        "gemini_name": "R266.1_Neuromuscular_arthrogryposis",
+        "gemini_name": "R266.1_Neuromuscular arthrogryposis",
         "panels": []
     }
 }
