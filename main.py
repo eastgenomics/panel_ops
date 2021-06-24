@@ -248,7 +248,7 @@ def main(**param):
 
             if param["g2t"]:
                 ops.mod_db.import_new_g2t(param["g2t"])
-            
+
             if param["new_panel"]:
                 ops.mod_db.import_bespoke_panel(param["new_panel"])
 
