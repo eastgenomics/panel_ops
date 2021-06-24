@@ -10,8 +10,7 @@ Checking database data, checking tests against Test directory, checking gene tra
 
 ## What is required for this to run?
 
-Python > 3.6
-
+- Python > 3.6
 - Database called panel_database
 
 <p align="center">
@@ -54,6 +53,10 @@ python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_fo
 python main.py mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
 # import hgnc data
 python main.py mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
+# import g2t data
+python main.py mod_db ${admin_user} ${admin_passwd} -g2t ${g2t_file}
+# import bespoke panels
+python main.py mod_db ${admin_user} ${admin_passwd} -new_panel ${xls_file}
 ```
 
 ## What does this output?

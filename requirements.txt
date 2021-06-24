@@ -2,6 +2,7 @@ Django==3.1.4
 dxpy==0.303.1
 hgnc-queries==0.1.0
 mysqlclient==2.0.1
+pandas==1.1.5
 panelapp==0.7.3
 packaging==20.9
 PyVCF==0.6.8

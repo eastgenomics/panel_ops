@@ -1,9 +1,11 @@
 from collections import defaultdict, OrderedDict
 import datetime
 import os
+import re
 from pathlib import Path
 
 from packaging import version
+import pandas as pd
 import regex
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -772,6 +774,10 @@ def gather_panel_data_django_json(
         panel_type_pk = get_existing_object_pk(
             paneltype_json, "type", panel_dict["type"]
         )
+
+        if panelapp_id.endswith("_SG"):
+            panelapp_id = ""
+
         panel_fields = {
                 "panelapp_id": panelapp_id, "name": panel_dict["name"],
                 "panel_type_id": panel_type_pk
@@ -961,7 +967,6 @@ def gather_clinical_indication_data_django_json(
             clinind_fields = {
                 "clinical_indication_id": test_code,
                 "name": name,
-                "version": version,
                 "gemini_name": gemini_name,
             }
             clinical_indication_json.append(
@@ -1036,7 +1041,8 @@ def gather_clinical_indication_data_django_json(
 
             pk_dict["clinind_panels"] += 1
             clinind_panels_fields = {
-                "clinical_indication_id": clin_ind_pk, "panel_id": panel_pk
+                "clinical_indication_id": clin_ind_pk, "panel_id": panel_pk,
+                "version": version
             }
             clinical_indication2panels_json.append(
                 get_django_json(
@@ -1248,3 +1254,42 @@ def get_clinical_indication_through_genes(
         gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
 
     return gemini2genes
+
+
+def parse_bespoke_panel_form(panel_form: str):
+    """ Parse the bespoke panel excel form
+
+    Args:
+        panel_form (str): Excel panel form
+
+    Returns:
+        dict: Dict of dict containing data for clinical indication, panel, genes
+    """
+
+    # read in the excel sheets of interest
+    metadata_df = pd.read_excel(panel_form, sheet_name="Admin details")
+    gene_df = pd.read_excel(panel_form, sheet_name="Gene list")
+
+    # get data from hardcoded locations in the metadata sheet
+    clinical_indication = metadata_df.iat[2, 1]
+    ci_version = metadata_df.iat[8, 1].strftime("%Y-%m-%d")
+    panel = metadata_df.iat[3, 1]
+    panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+
+    # get unique hgnc ids from the gene sheet
+    genes = set(gene_df.iloc[0:, 1])
+
+    # setup the data for future use
+    data = {
+        clinical_indication: {
+            "version": ci_version,
+            "panels": {
+                panel: {
+                    "genes": genes,
+                    "version": panel_version
+                }
+            }
+        }
+    }
+
+    return data
