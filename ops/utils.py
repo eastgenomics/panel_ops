@@ -1042,7 +1042,7 @@ def gather_clinical_indication_data_django_json(
             pk_dict["clinind_panels"] += 1
             clinind_panels_fields = {
                 "clinical_indication_id": clin_ind_pk, "panel_id": panel_pk,
-                "version": version
+                "ci_version": version
             }
             clinical_indication2panels_json.append(
                 get_django_json(
