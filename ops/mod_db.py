@@ -132,7 +132,7 @@ def import_new_g2t(path_to_g2t_file: str):
                 f"Created gene and feature for {gene}: {new_gene}, "
                 f"{new_feature}"
             )
-        output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+            output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
         for transcript, statuses in g2t_data[gene].items():
             refseq, version = transcript.split(".")
@@ -170,7 +170,7 @@ def import_new_g2t(path_to_g2t_file: str):
                     transcript_id=new_tx.id, clinical_transcript=clinical
                 )
 
-                if not tx_created or not g2t_created:
+                if (tx_created and not g2t_created) or (not tx_created and g2t_created):
                     msg = (
                         "One of the following row already existed: "
                         f"{new_tx} {tx_created} | "
@@ -178,7 +178,7 @@ def import_new_g2t(path_to_g2t_file: str):
                         "Please check that there is no underlying issues."
                     )
                     output_to_loggers(msg, "warning", CONSOLE, MOD_DB)
-                else:
+                elif tx_created and g2t_created:
                     msg = (
                         f"The following objects have been created: {new_tx}, "
                         f"{new_g2t}"
@@ -270,8 +270,7 @@ def import_bespoke_panel(panel_form: str):
                         f"Feature for gene {new_feature.gene_id} created: "
                         f"{new_feature.id}"
                     )
-
-                output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+                    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
                 # create panel feature link
                 panel_feature_link = PanelFeatures.objects.get_or_create(
@@ -286,8 +285,7 @@ def import_bespoke_panel(panel_form: str):
 
             if ci_created:
                 msg = f"Clinical indication {new_ci.name} created: {new_ci.id}"
-
-            output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+                output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
             # create clinical indication panel link
             ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
