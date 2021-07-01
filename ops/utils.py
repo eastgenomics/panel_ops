@@ -965,7 +965,7 @@ def gather_clinical_indication_data_django_json(
 
         if gemini_name != "":
             clinind_fields = {
-                "clinical_indication_id": test_code,
+                "code": test_code,
                 "name": name,
                 "gemini_name": gemini_name,
             }
