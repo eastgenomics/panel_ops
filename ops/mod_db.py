@@ -280,7 +280,7 @@ def import_bespoke_panel(panel_form: str):
 
             # create clinical indication
             new_ci, ci_created = ClinicalIndication.objects.get_or_create(
-                name=ci, gemini_name=gemini_name, clinical_indication_id=ci_id
+                name=ci, gemini_name=gemini_name, code=ci_id
             )
 
             if ci_created:
@@ -309,8 +309,8 @@ def assign_CUH_code(clinical_indication: str):
 
     # check if the clinical indication already exists
     ci_ids = ClinicalIndication.objects.filter(
-        clinical_indication_id__startswith="C", name=clinical_indication
-    ).values_list("clinical_indication_id")
+        code__startswith="C", name=clinical_indication
+    ).values_list("code")
 
     # if it exists, give a decimal point higher
     if ci_ids:
@@ -323,8 +323,8 @@ def assign_CUH_code(clinical_indication: str):
     else:
         # get the latest C code
         all_C_codes = ClinicalIndication.objects.filter(
-            clinical_indication_id__startswith="C"
-        ).values_list("clinical_indication_id", flat=True)
+            code__startswith="C"
+        ).values_list("code", flat=True)
 
         # if C codes already exists in the database:
         if all_C_codes:
