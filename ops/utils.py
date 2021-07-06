@@ -965,7 +965,7 @@ def gather_clinical_indication_data_django_json(
 
         if gemini_name != "":
             clinind_fields = {
-                "clinical_indication_id": test_code,
+                "code": test_code,
                 "name": name,
                 "gemini_name": gemini_name,
             }
@@ -1034,9 +1034,9 @@ def gather_clinical_indication_data_django_json(
                 )
             else:
                 # it's a gene panel name thingy (HGNC:[0-9]_SG)
-                gene_panel_name = f"{panel}_SG"
+                gene_panel_name = f"{panel}_SG_panel"
                 panel_pk = get_existing_object_pk(
-                    panel_json, "panelapp_id", gene_panel_name
+                    panel_json, "name", gene_panel_name
                 )
 
             pk_dict["clinind_panels"] += 1
@@ -1146,7 +1146,7 @@ def add_feature(feature_pk: int, feature_type_pk: int, **links):
 
 def add_panel_feature(
     pk: int, panel_pk: int, version: str, feature_pk: int,
-    description: str = None
+    description: str = ""
 ):
     """ Return a panel feature object
 

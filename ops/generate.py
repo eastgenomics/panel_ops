@@ -80,7 +80,9 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     # get the gemini names and associated genes and panels ids
     cis = session.query(
         ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
-    ).join(ci2panels_tb).all()
+    ).join(
+        ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
+    ).all()
 
     gemini2genes = get_clinical_indication_through_genes(
         session, meta, cis, hgnc_data
@@ -256,7 +258,9 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     # get the gemini names and associated genes and panels ids
     ci_in_manifest = session.query(
         ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
-    ).join(ci2panels_tb).filter(
+    ).join(
+        ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
+    ).filter(
         ci_tb.c.gemini_name.in_(uniq_used_panels)
     ).all()
 
