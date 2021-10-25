@@ -77,7 +77,7 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     ci_tb = meta.tables["clinical_indication"]
     ci2panels_tb = meta.tables["clinical_indication_panels"]
 
-    # get the gemini names and associated genes and panels ids
+    # get the gemini names and associated panels ids
     cis = session.query(
         ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
     ).join(

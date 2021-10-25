@@ -7,7 +7,7 @@ from packaging import version
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
-from .utils import parse_hgnc_dump, parse_g2t, parse_bespoke_panel_form
+from .utils import parse_hgnc_dump, parse_g2t, parse_panel_form
 
 sys.path.append(path_to_panel_palace)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "panel_palace.settings")
@@ -191,8 +191,8 @@ def import_new_g2t(path_to_g2t_file: str):
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
 
-def import_bespoke_panel(panel_form: str):
-    """ Import bespoke panel in the database
+def import_panel_form_data(panel_form: str):
+    """ Import panel in the database
 
     Args:
         panel_form (str): Excel file containing data for the new panel form
@@ -202,8 +202,8 @@ def import_bespoke_panel(panel_form: str):
         database
     """
 
-    # parse bespoke panel form
-    data = parse_bespoke_panel_form(panel_form)
+    # parse panel form
+    data, add_on = parse_panel_form(panel_form)
 
     msg = f"Checking {panel_form} data before importing it"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
@@ -225,19 +225,27 @@ def import_bespoke_panel(panel_form: str):
     for ci in data:
         ci_data = data[ci]
 
-        # assign "C code" to bespoke clinical indication
-        ci_id = assign_CUH_code(ci)
-        # assemble the gemini name from CUH code and the ci name
-        gemini_name = f"{ci_id}_{ci}"
+        # if it's an add on panel, get the ci object to reuse its attributes
+        if add_on:
+            ci_object = ClinicalIndication.objects.get(
+                code=ci_data["add_on"]
+            )
+
+            gemini_name = ci_object.gemini_name
+        else:
+            # assign "C code" to bespoke clinical indication
+            ci_id = assign_CUH_code(ci)
+            # assemble the gemini name from CUH code and the ci name
+            gemini_name = f"{ci_id}_{ci}"
 
         for panel in ci_data["panels"]:
             panel_data = ci_data["panels"][panel]
 
             # get the panel type matching the in-house type
-            bespoke_panel_type_id = PanelType.objects.get(type="in-house").id
+            panel_type_id = PanelType.objects.get(type="in-house").id
             # create panel
             new_panel, panel_created = Panel.objects.get_or_create(
-                name=panel, panel_type_id=bespoke_panel_type_id
+                name=panel, panel_type_id=panel_type_id
             )
 
             if panel_created:
@@ -278,20 +286,28 @@ def import_bespoke_panel(panel_form: str):
                     feature_id=new_feature.id, panel_id=new_panel.id
                 )
 
-            # create clinical indication
-            new_ci, ci_created = ClinicalIndication.objects.get_or_create(
-                name=ci, gemini_name=gemini_name, code=ci_id
-            )
+            if not add_on:
+                # create clinical indication
+                new_ci, ci_created = ClinicalIndication.objects.get_or_create(
+                    name=ci, gemini_name=gemini_name, code=ci_id
+                )
 
-            if ci_created:
-                msg = f"Clinical indication {new_ci.name} created: {new_ci.id}"
-                output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+                # create clinical indication panel link
+                ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
+                    clinical_indication_id=new_ci.id, panel_id=new_panel.id,
+                    ci_version=ci_data["version"]
+                )
 
-            # create clinical indication panel link
-            ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
-                clinical_indication_id=new_ci.id, panel_id=new_panel.id,
-                ci_version=ci_data["version"]
-            )
+                if ci_created:
+                    msg = f"Clinical indication {new_ci.name} created: {new_ci.id}"
+                    output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+            else:
+                # just create links from the clinical indication to the
+                # existing panel and the add on panel
+                ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
+                    clinical_indication_id=ci_object.id, panel_id=new_panel.id,
+                    ci_version=ci_data["version"]
+                )
 
     msg = f"Finished importing {panel_form}"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)

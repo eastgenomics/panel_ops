@@ -1256,8 +1256,8 @@ def get_clinical_indication_through_genes(
     return gemini2genes
 
 
-def parse_bespoke_panel_form(panel_form: str):
-    """ Parse the bespoke panel excel form
+def parse_panel_form(panel_form: str):
+    """ Parse the panel excel form
 
     Args:
         panel_form (str): Excel panel form
@@ -1272,9 +1272,20 @@ def parse_bespoke_panel_form(panel_form: str):
 
     # get data from hardcoded locations in the metadata sheet
     clinical_indication = metadata_df.iat[2, 1]
-    ci_version = metadata_df.iat[8, 1].strftime("%Y-%m-%d")
+    ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
     panel = metadata_df.iat[3, 1]
     panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+    add_on = metadata_df.iat[6, 1]
+
+    if add_on:
+        # add on clinical indication version
+        ci_version = f"AO_{ci_version}"
+        add_on_bool = True
+    else:
+        # bespoke clinical indication version
+        ci_version = f"BP_{ci_version}"
+        add_on = None
+        add_on_bool = False
 
     # get unique hgnc ids from the gene sheet
     genes = set(gene_df.iloc[0:, 1])
@@ -1283,6 +1294,7 @@ def parse_bespoke_panel_form(panel_form: str):
     data = {
         clinical_indication: {
             "version": ci_version,
+            "add_on": add_on,
             "panels": {
                 panel: {
                     "genes": genes,
@@ -1292,4 +1304,4 @@ def parse_bespoke_panel_form(panel_form: str):
         }
     }
 
-    return data
+    return data, add_on_bool
