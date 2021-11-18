@@ -248,10 +248,12 @@ def import_panel_form_data(panel_form: str):
                 name=panel, panel_type_id=panel_type_id
             )
 
+            assert panel_created is True, (
+                f"Panel {new_panel.name} already exists: {new_panel.id}"
+            )
+
             if panel_created:
                 msg = f"Panel {new_panel.name} created: {new_panel.id}"
-            else:
-                msg = f"Panel {new_panel.name} already exists: {new_panel.id}"
 
             output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 

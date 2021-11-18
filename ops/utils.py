@@ -233,6 +233,11 @@ def parse_g2t(file):
             canonical_status = False
             gene, transcript, clinical_tx, canonical = line.strip().split()
 
+            assert clinical_tx != "to_review", (
+                f"{gene} has a 'to_review' status, please review it before "
+                "importing the g2t file"
+            )
+
             if not clinical_tx.startswith("not"):
                 clinical_tx_status = True
 
