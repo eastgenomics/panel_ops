@@ -58,7 +58,7 @@ def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
     return output_folder
 
 
-def generate_genepanels(session, meta, hgnc_data: dict):
+def generate_genepanels(session, meta):
     """ Generate gene panels file
 
     Args:
@@ -84,9 +84,7 @@ def generate_genepanels(session, meta, hgnc_data: dict):
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).all()
 
-    gemini2genes = get_clinical_indication_through_genes(
-        session, meta, cis, hgnc_data
-    )
+    gemini2genes = get_clinical_indication_through_genes(session, meta, cis)
 
     # we want a pretty file so store the data in a nice way
     output_data = set()
