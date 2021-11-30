@@ -19,13 +19,23 @@
 """
 
 import argparse
-import sys
+import json
+import os
 
 import ops
 
-sys.path.append(ops.config.path_to_panel_config)
+# environment variables from env file
+USER_RO = os.getenv("user_ro")
+PASSWD_RO = os.getenv("passwd_ro")
 
-import config_panel_db
+USER_ADMIN = os.getenv("user_admin")
+PASSWD_ADMIN = os.getenv("passwd_admin")
+
+HOST = os.getenv("host")
+
+REFERENCES = json.loads(os.getenv("references"))
+FEATURE_TYPES = json.loads(os.getenv("feature_types"))
+PANEL_TYPES = json.loads(os.getenv("panel_types"))
 
 
 def parse_args():
@@ -109,10 +119,6 @@ def parse_args():
 
 
 def main(**param):
-    user = config_panel_db.user_ro
-    passwd = config_panel_db.passwd_ro
-    host = config_panel_db.host
-
     if param["test_xls"]:
         # gather data from the test directory
         clinind_data = ops.utils.parse_test_directory(param["test_xls"])
@@ -139,15 +145,14 @@ def main(**param):
             }
 
             session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
+                USER_RO, PASSWD_RO, HOST, "panel_database"
             )
 
             # gather data from panels
             (
                 panelapp_dict, superpanel_dict, gene_dict
             ) = ops.utils.create_panelapp_dict(
-                files["panels"].split(","), config_panel_db.panel_types,
-                single_genes
+                files["panels"].split(","), PANEL_TYPES, single_genes
             )
 
             # get all the transcripts from the nirvana gff
@@ -201,9 +206,8 @@ def main(**param):
             # Generate the jsons for the import
             ops.generate.generate_django_jsons(
                 files["panels"].split(","), clean_clinind_data, g2t_data,
-                single_genes, config_panel_db.references,
-                config_panel_db.feature_types, config_panel_db.panel_types,
-                pk_dict
+                single_genes, ["GRCh37", "GRCh38"],
+                FEATURE_TYPES, PANEL_TYPES, pk_dict
             )
 
         # Generate genepanels file from database
@@ -212,7 +216,7 @@ def main(**param):
                 "-hgnc option is needed for genepanels cmd"
             )
             session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
+                USER_RO, PASSWD_RO, HOST, "panel_database"
             )
             ops.generate.generate_genepanels(session, meta, hgnc_data)
 
@@ -222,7 +226,7 @@ def main(**param):
                 "-hgnc option is needed for manifest cmd"
             )
             session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
+                USER_RO, PASSWD_RO, HOST, "panel_database"
             )
             sample2panels = ops.generate.generate_manifest(
                 session, meta, param["manifest"], hgnc_data
@@ -231,8 +235,7 @@ def main(**param):
     elif param["command"] == "mod_db":
         # check if the credentials for panel admin are correct
         if (
-            param["user"] == config_panel_db.user_admin and
-            param["passwd"] == config_panel_db.passwd_admin
+            param["user"] == USER_ADMIN and param["passwd"] == PASSWD_ADMIN
         ):
             # Import given django fixture to the database
             if param["initial_import"]:
