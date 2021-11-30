@@ -212,9 +212,6 @@ def main(**param):
 
         # Generate genepanels file from database
         if param["genepanels"]:
-            assert hgnc_data is not None, (
-                "-hgnc option is needed for genepanels cmd"
-            )
             session, meta = ops.utils.connect_to_db(
                 USER_RO, PASSWD_RO, HOST, "panel_database"
             )
@@ -222,9 +219,6 @@ def main(**param):
 
         # Generate a bioinformatic manifest type file for reports
         if param["manifest"]:
-            assert hgnc_data is not None, (
-                "-hgnc option is needed for manifest cmd"
-            )
             session, meta = ops.utils.connect_to_db(
                 USER_RO, PASSWD_RO, HOST, "panel_database"
             )
