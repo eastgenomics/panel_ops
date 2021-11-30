@@ -226,7 +226,7 @@ def generate_django_jsons(
     return output_folder
 
 
-def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
+def generate_manifest(session, meta, gemini_dump: str):
     """ Generate new bioinformatic manifest for the new database
 
     Args:
@@ -265,7 +265,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     ).all()
 
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci_in_manifest, hgnc_data
+        session, meta, ci_in_manifest
     )
 
     # we want a pretty file so store the data that we want to output in a nice
