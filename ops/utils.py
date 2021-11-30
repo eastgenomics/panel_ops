@@ -159,8 +159,19 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
     return assigned_panel_type
 
 
-def filter_out_gene(hgnc_row: dict, header: str, string_to_match: str):
-    if string_to_match in hgnc_row[header]:
+def filter_out_gene(
+    session, meta, hgnc_id: dict, header: str, string_to_match: str
+):
+    hgnc_data = meta.tables["current_hgnc"]
+
+    gene_query = session.query(hgnc_data.c.hgnc_id).filter(
+        hgnc_id.c.hgnc_id == hgnc_id
+    ).filter(
+        getattr(hgnc_data, header).like(f"%{string_to_match}%")
+    )
+
+    if gene_query:
+        print(gene_query)
         return True
     else:
         return False
@@ -1197,9 +1208,7 @@ def gather_single_genes(clin_ind2targets: dict):
     return single_genes
 
 
-def get_clinical_indication_through_genes(
-    session, meta, clinical_indications, hgnc_data
-):
+def get_clinical_indication_through_genes(session, meta, clinical_indications):
     """ Loop through given clinical indications database rows and get linked
         panels
 
@@ -1207,7 +1216,6 @@ def get_clinical_indication_through_genes(
         session (SQLAlchemy Session): SQLAlchemy Session
         meta (SQLAlchemy Meta): SQLAlchemy Meta
         clinical_indications: rows of SQLAlchemy data from the clinical indications table
-        hgnc_data (dict): Dict of parsed hgnc data from an HGNC dump
 
     Returns:
         dict: dict of clinical indications to dict of panels to genes
@@ -1241,12 +1249,12 @@ def get_clinical_indication_through_genes(
             # only get genes that are in the latest version of a given panel
             if version.parse(str(panel_version)) == latest_version:
                 # filter gene if it's RNA
-                if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                if filter_out_gene(hgnc_id, "locus_type", "RNA"):
                     continue
 
                 # get rid of mitochondrial genes
                 if filter_out_gene(
-                    hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+                    hgnc_id, "approved_name", "mitochondrially encoded"
                 ):
                     continue
 
