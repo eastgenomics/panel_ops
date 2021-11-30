@@ -165,7 +165,7 @@ def filter_out_gene(
     hgnc_data = meta.tables["hgnc_current"]
 
     gene_query = session.query(hgnc_data.c.hgnc_id).filter(
-        hgnc_id.c.hgnc_id == hgnc_id
+        hgnc_data.c.hgnc_id == hgnc_id
     ).filter(
         getattr(hgnc_data, header).like(f"%{string_to_match}%")
     )
