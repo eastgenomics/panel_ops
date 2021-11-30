@@ -1249,12 +1249,15 @@ def get_clinical_indication_through_genes(session, meta, clinical_indications):
             # only get genes that are in the latest version of a given panel
             if version.parse(str(panel_version)) == latest_version:
                 # filter gene if it's RNA
-                if filter_out_gene(hgnc_id, "locus_type", "RNA"):
+                if filter_out_gene(
+                    session, meta, hgnc_id, "locus_type", "RNA"
+                ):
                     continue
 
                 # get rid of mitochondrial genes
                 if filter_out_gene(
-                    hgnc_id, "approved_name", "mitochondrially encoded"
+                    session, meta, hgnc_id, "approved_name",
+                    "mitochondrially encoded"
                 ):
                     continue
 
