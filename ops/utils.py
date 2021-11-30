@@ -167,7 +167,7 @@ def filter_out_gene(
     gene_query = session.query(hgnc_data.c.hgnc_id).filter(
         hgnc_data.c.hgnc_id == hgnc_id
     ).filter(
-        getattr(hgnc_data, header).like(f"%{string_to_match}%")
+        hgnc_data.__table__.c[header].like(f"%{string_to_match}%")
     )
 
     if gene_query:
