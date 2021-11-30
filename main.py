@@ -215,7 +215,7 @@ def main(**param):
             session, meta = ops.utils.connect_to_db(
                 USER_RO, PASSWD_RO, HOST, "panel_database"
             )
-            ops.generate.generate_genepanels(session, meta, hgnc_data)
+            ops.generate.generate_genepanels(session, meta)
 
         # Generate a bioinformatic manifest type file for reports
         if param["manifest"]:
@@ -223,7 +223,7 @@ def main(**param):
                 USER_RO, PASSWD_RO, HOST, "panel_database"
             )
             sample2panels = ops.generate.generate_manifest(
-                session, meta, param["manifest"], hgnc_data
+                session, meta, param["manifest"]
             )
 
     elif param["command"] == "mod_db":
