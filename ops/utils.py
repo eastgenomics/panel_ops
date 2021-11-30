@@ -162,7 +162,7 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
 def filter_out_gene(
     session, meta, hgnc_id: dict, header: str, string_to_match: str
 ):
-    hgnc_data = meta.tables["current_hgnc"]
+    hgnc_data = meta.tables["hgnc_current"]
 
     gene_query = session.query(hgnc_data.c.hgnc_id).filter(
         hgnc_id.c.hgnc_id == hgnc_id
