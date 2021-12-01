@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import date
 import json
 
 from .logger import setup_logging, output_to_loggers
@@ -247,7 +249,7 @@ def generate_manifest(session, meta, gemini_dump: str):
     ci_tb = meta.tables["clinical_indication"]
     ci2panels_tb = meta.tables["clinical_indication_panels"]
 
-    uniq_used_panels = set([
+    uniq_used_clinical_indications = set([
         panel
         for ele in sample2gemini_name.values()
         for panel in ele
@@ -255,15 +257,39 @@ def generate_manifest(session, meta, gemini_dump: str):
 
     # get the gemini names and associated genes and panels ids
     ci_in_manifest = session.query(
-        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
+        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id, ci2panels_tb.c.ci_version
     ).join(
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).filter(
-        ci_tb.c.gemini_name.in_(uniq_used_panels)
+        ci_tb.c.gemini_name.in_(uniq_used_clinical_indications)
     ).all()
 
+    ci2panels = {}
+
+    # get latest version of clinical indication
+    for ci in ci_in_manifest:
+        gemini_name, panel_id, ci_version = ci
+        source, version = ci_version.split("_")
+        dated_version = date.fromisoformat(version)
+
+        # compare dates between stored date and new date
+        if gemini_name in ci2panels:
+            stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
+            dated_stored_version = date.fromisoformat(stored_version)
+
+            # if new date is higher replace all stored dates
+            if dated_version > dated_stored_version:
+                ci2panels[gemini_name] = [(panel_id, ci_version)]
+            # date identical we need to store the incoming date and panel id
+            elif dated_version == dated_stored_version:
+                ci2panels[gemini_name].append((panel_id, ci_version))
+
+        # unseen clinical indication
+        else:
+            ci2panels[gemini_name] = [(panel_id, ci_version)]
+
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci_in_manifest
+        session, meta, ci2panels
     )
 
     # we want a pretty file so store the data that we want to output in a nice
