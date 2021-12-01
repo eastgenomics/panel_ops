@@ -159,24 +159,6 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
     return assigned_panel_type
 
 
-def filter_out_gene(
-    session, meta, hgnc_id: dict, header: str, string_to_match: str
-):
-    hgnc_data = meta.tables["hgnc_current"]
-
-    gene_query = session.query(hgnc_data.c.hgnc_id).filter(
-        hgnc_data.c.hgnc_id == hgnc_id
-    ).filter(
-        hgnc_data.__table__.c[header].like(f"%{string_to_match}%")
-    )
-
-    if gene_query:
-        print(gene_query)
-        return True
-    else:
-        return False
-
-
 def parse_hgnc_dump(hgnc_file: str):
     """ Parse the hgnc dump and return a dict of the data in the dump
 
@@ -1225,8 +1207,18 @@ def get_clinical_indication_through_genes(session, meta, clinical_indications):
     panel2features_tb = meta.tables["panel_features"]
     feature_tb = meta.tables["feature"]
     gene_tb = meta.tables["gene"]
+    hgnc_data = meta.tables["hgnc_current"]
 
     gemini2genes = defaultdict(lambda: defaultdict(lambda: set()))
+
+    # query HGNC current to select RNA genes
+    gene_query = session.query(hgnc_data.c.hgnc_id).filter(
+        (hgnc_data.c["locus_type"].like("%RNA%")) |
+        (hgnc_data.c["approved_name"].like("%mitochondrially encoded%"))
+    ).all()
+
+    # flatten list of tuples that come out of SQLAlchemy
+    flatten_RNA_genes = set([gene for (gene,) in gene_query])
 
     for ci in clinical_indications:
         gemini_name, panel_id = ci
@@ -1249,16 +1241,7 @@ def get_clinical_indication_through_genes(session, meta, clinical_indications):
             # only get genes that are in the latest version of a given panel
             if version.parse(str(panel_version)) == latest_version:
                 # filter gene if it's RNA
-                if filter_out_gene(
-                    session, meta, hgnc_id, "locus_type", "RNA"
-                ):
-                    continue
-
-                # get rid of mitochondrial genes
-                if filter_out_gene(
-                    session, meta, hgnc_id, "approved_name",
-                    "mitochondrially encoded"
-                ):
+                if hgnc_id in flatten_RNA_genes:
                     continue
 
                 # remove TRAC and IGHM genes from genepanels and manifest
