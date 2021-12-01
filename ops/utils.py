@@ -1220,37 +1220,36 @@ def get_clinical_indication_through_genes(session, meta, clinical_indications):
     # flatten list of tuples that come out of SQLAlchemy
     flatten_RNA_genes = set([gene for (gene,) in gene_query])
 
-    for ci in clinical_indications:
-        gemini_name, panel_id = ci
+    for ci, panels in clinical_indications.items():
+        for panel_id, ci_version in panels:
+            # query to get all genes from a panel id
+            data = session.query(
+                panel_tb.c.name, panel2features_tb.c.feature_id,
+                panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
+            ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
+                panel2features_tb.c.panel_id == panel_id
+            ).all()
 
-        # query to get all genes from a panel id
-        data = session.query(
-            panel_tb.c.name, panel2features_tb.c.feature_id,
-            panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
-        ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
-            panel2features_tb.c.panel_id == panel_id
-        ).all()
+            # use the packaging package to parse the version and take the latest
+            # version
+            latest_version = max([version.parse(d[2]) for d in data])
+            panel_genes = [(d[0], d[2], d[3]) for d in data]
+            hgnc_ids = []
 
-        # use the packaging package to parse the version and take the latest
-        # version
-        latest_version = max([version.parse(d[2]) for d in data])
-        panel_genes = [(d[0], d[2], d[3]) for d in data]
-        hgnc_ids = []
+            for panel, panel_version, hgnc_id in panel_genes:
+                # only get genes that are in the latest version of a given panel
+                if version.parse(str(panel_version)) == latest_version:
+                    # filter gene if it's RNA
+                    if hgnc_id in flatten_RNA_genes:
+                        continue
 
-        for panel, panel_version, hgnc_id in panel_genes:
-            # only get genes that are in the latest version of a given panel
-            if version.parse(str(panel_version)) == latest_version:
-                # filter gene if it's RNA
-                if hgnc_id in flatten_RNA_genes:
-                    continue
+                    # remove TRAC and IGHM genes from genepanels and manifest
+                    if hgnc_id in ["HGNC:12029", "HGNC:5541"]:
+                        continue
 
-                # remove TRAC and IGHM genes from genepanels and manifest
-                if hgnc_id in ["HGNC:12029", "HGNC:5541"]:
-                    continue
+                    hgnc_ids.append(hgnc_id)
 
-                hgnc_ids.append(hgnc_id)
-
-        gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
+            gemini2genes[ci][f"{panel}_{latest_version}"].update(hgnc_ids)
 
     return gemini2genes
 
@@ -1304,3 +1303,31 @@ def parse_panel_form(panel_form: str):
     }
 
     return data, add_on_bool
+
+
+def get_latest_clinical_indication_data(query_result):
+    ci2panels = {}
+
+    # get latest version of clinical indication
+    for ci in query_result:
+        gemini_name, panel_id, ci_version = ci
+        source, version = ci_version.split("_")
+        dated_version = datetime.date.fromisoformat(version)
+
+        # compare dates between stored date and new date
+        if gemini_name in ci2panels:
+            stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
+            dated_stored_version = datetime.date.fromisoformat(stored_version)
+
+            # if new date is higher replace all stored dates
+            if dated_version > dated_stored_version:
+                ci2panels[gemini_name] = [(panel_id, ci_version)]
+            # date identical we need to store the incoming date and panel id
+            elif dated_version == dated_stored_version:
+                ci2panels[gemini_name].append((panel_id, ci_version))
+
+        # unseen clinical indication
+        else:
+            ci2panels[gemini_name] = [(panel_id, ci_version)]
+    
+    return ci2panels
