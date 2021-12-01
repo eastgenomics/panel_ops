@@ -4,7 +4,7 @@ import json
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, write_new_output_folder, parse_gemini_dump,
+    get_date, get_latest_clinical_indication_data, write_new_output_folder, parse_gemini_dump,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
@@ -81,12 +81,15 @@ def generate_genepanels(session, meta):
 
     # get the gemini names and associated panels ids
     cis = session.query(
-        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
+        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id, ci2panels_tb.c.ci_version
     ).join(
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).all()
 
-    gemini2genes = get_clinical_indication_through_genes(session, meta, cis)
+    ci2panels = get_latest_clinical_indication_data(cis)
+    gemini2genes = get_clinical_indication_through_genes(
+        session, meta, ci2panels
+    )
 
     # we want a pretty file so store the data in a nice way
     output_data = set()
@@ -264,30 +267,7 @@ def generate_manifest(session, meta, gemini_dump: str):
         ci_tb.c.gemini_name.in_(uniq_used_clinical_indications)
     ).all()
 
-    ci2panels = {}
-
-    # get latest version of clinical indication
-    for ci in ci_in_manifest:
-        gemini_name, panel_id, ci_version = ci
-        source, version = ci_version.split("_")
-        dated_version = date.fromisoformat(version)
-
-        # compare dates between stored date and new date
-        if gemini_name in ci2panels:
-            stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
-            dated_stored_version = date.fromisoformat(stored_version)
-
-            # if new date is higher replace all stored dates
-            if dated_version > dated_stored_version:
-                ci2panels[gemini_name] = [(panel_id, ci_version)]
-            # date identical we need to store the incoming date and panel id
-            elif dated_version == dated_stored_version:
-                ci2panels[gemini_name].append((panel_id, ci_version))
-
-        # unseen clinical indication
-        else:
-            ci2panels[gemini_name] = [(panel_id, ci_version)]
-
+    ci2panels = get_latest_clinical_indication_data(ci_in_manifest)
     gemini2genes = get_clinical_indication_through_genes(
         session, meta, ci2panels
     )
