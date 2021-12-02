@@ -1316,6 +1316,8 @@ def get_latest_clinical_indication_data(query_result):
 
         # compare dates between stored date and new date
         if gemini_name in ci2panels:
+            # all dates stored should have the same date so select first
+            # element of list of tuples and get the date of the ci2panel link
             stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
             dated_stored_version = datetime.date.fromisoformat(stored_version)
 
