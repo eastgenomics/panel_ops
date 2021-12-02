@@ -1329,5 +1329,5 @@ def get_latest_clinical_indication_data(query_result):
         # unseen clinical indication
         else:
             ci2panels[gemini_name] = [(panel_id, ci_version)]
-    
+
     return ci2panels
