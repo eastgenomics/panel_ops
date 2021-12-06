@@ -1306,6 +1306,15 @@ def parse_panel_form(panel_form: str):
 
 
 def get_latest_clinical_indication_data(query_result):
+    """ Get the latest clinical indication data using ci_version field
+
+    Args:
+        query_result (SQLAlchemy query): Result of SQLAlchemy query
+
+    Returns:
+        dict: Dict containing the most recent clinical indication and its 
+        linked panels
+    """ 
     ci2panels = {}
 
     # get latest version of clinical indication
