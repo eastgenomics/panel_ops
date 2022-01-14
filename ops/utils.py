@@ -1275,12 +1275,18 @@ def parse_panel_form(panel_form: str):
     metadata_df = pd.read_excel(panel_form, sheet_name="Admin details")
     gene_df = pd.read_excel(panel_form, sheet_name="Gene list")
 
+    validate_panel_form(metadata_df, gene_df)
+
     # get data from hardcoded locations in the metadata sheet
     clinical_indication = metadata_df.iat[2, 1]
-    ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
     panel = metadata_df.iat[3, 1]
-    panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+    panel_version = ""
+
+    if pd.notna(metadata_df.iat[4, 1]):
+        panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+
     add_on = metadata_df.iat[6, 1]
+    ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
 
     if add_on:
         # add on clinical indication version
@@ -1310,3 +1316,22 @@ def parse_panel_form(panel_form: str):
     }
 
     return data, add_on_bool
+
+
+def validate_panel_form(metadata_df, gene_df):
+    """ Validate panel form
+
+    Args:
+        metadata_df (Pandas dataframe): Dataframe containing metadata for the
+        panel
+        gene_df (Pandas dataframe): Dataframe with genes of the panel
+    """
+
+    assert all(
+        [
+            pd.notna(metadata_df.iat[2, 1]), pd.notna(metadata_df.iat[3, 1]),
+            pd.notna(metadata_df.iat[9, 1])
+        ]
+    ), "Some essential fields in the metadata sheet are absent"
+
+    assert set(gene_df.iloc[0:, 1]), "No genes are in the gene sheet"
