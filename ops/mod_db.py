@@ -245,9 +245,20 @@ def import_panel_form_data(panel_form: str):
             if add_on:
                 # get the existing panel associated to the existing clinical
                 # indication
-                existing_panel = Panel.objects.get(
+                existing_panel_id = set(Panel.objects.filter(
                     clinicalindicationpanels__clinical_indication_id=existing_ci.id
-                )
+                ).values_list("id", flat=True))
+
+                if len(existing_panel_id) == 1:
+                    existing_panel_id = list(existing_panel_id)[0]
+                else:
+                    raise Exception((
+                        "2 panels are linked to the same clinical indication. "
+                        "Please note that clinical indications that are "
+                        "linked to multiple panels such as R144.1 are not "
+                        "handled with panel_ops v1.4.0"
+                    ))
+
             else:
                 # create panel
                 new_panel, panel_created = Panel.objects.get_or_create(
@@ -287,7 +298,7 @@ def import_panel_form_data(panel_form: str):
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
                 if add_on:
-                    latest_version = get_latest_version_panel(existing_panel)
+                    latest_version = get_latest_version_panel(existing_panel_id)
 
                     # increment latest version appropriately and switch to a
                     # string for import in db
@@ -301,7 +312,7 @@ def import_panel_form_data(panel_form: str):
 
                     panel_feature_link = PanelFeatures.objects.get_or_create(
                         panel_version=version_to_import,
-                        feature_id=new_feature.id, panel_id=existing_panel.id
+                        feature_id=new_feature.id, panel_id=existing_panel_id
                     )
 
                 else:
@@ -316,7 +327,7 @@ def import_panel_form_data(panel_form: str):
                 # existing panel and the add on panel
                 ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
                     clinical_indication_id=existing_ci.id,
-                    panel_id=existing_panel.id, ci_version=ci_data["version"]
+                    panel_id=existing_panel_id, ci_version=ci_data["version"]
                 )
             else:
                 # create clinical indication
@@ -419,6 +430,8 @@ def check_if_ci_data_in_database(data: dict):
                 clinicalindicationpanels__clinical_indication_id=ci_obj.id
             ).distinct().get()
 
+            latest_version = get_latest_version_panel(panel_obj.id)
+
             features_from_database = set(
                 PanelFeatures.objects.filter(
                     panel_id=panel_obj.id
@@ -441,11 +454,11 @@ def check_if_ci_data_in_database(data: dict):
     return False, ()
 
 
-def get_latest_version_panel(panel_obj):
+def get_latest_version_panel(panel_obj_id):
     """ Get the latest version of a panel object
 
     Args:
-        panel_obj (Django object): Django panel object
+        panel_obj_id (int): ID of Django panel object
 
     Returns:
         str: Latest version of given panel object
@@ -454,7 +467,7 @@ def get_latest_version_panel(panel_obj):
     # need to create link using info of possible existing add
     # on panel
     panel_versions = PanelFeatures.objects.filter(
-        id=panel_obj.id
+        id=panel_obj_id
     ).values_list("panel_version", flat=True)
 
     panel_add_on_versions = []
