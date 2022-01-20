@@ -213,9 +213,11 @@ def import_panel_form_data(panel_form: str):
     data_in_database, log_data = check_if_ci_data_in_database(data)
 
     if data_in_database:
+        ci_id, ci_version, panel_id, panel_version, features = log_data
         msg = (
             "The clinical indication associated to this set of genes already "
-            f"exists: ci_id {log_data[0]} -> feature_id(s) {log_data[1]}"
+            f"exists: ci_id {ci_id} - {ci_version} -> panel_id {panel_id} - "
+            f"{panel_version} --> feature_id(s) {features}"
         )
         raise Exception(msg)
 
@@ -422,21 +424,14 @@ def check_if_ci_data_in_database(data: dict):
 
         ci_obj = ClinicalIndication.objects.filter(
             **fields_to_filter_with
-        ).get()
+        )
 
         if ci_obj:
+            ci_obj = ci_obj.get()
             # gather genes from latest panel version
             panel_obj = Panel.objects.filter(
                 clinicalindicationpanels__clinical_indication_id=ci_obj.id
             ).distinct().get()
-
-            latest_version = get_latest_version_panel(panel_obj.id)
-
-            features_from_database = set(
-                PanelFeatures.objects.filter(
-                    panel_id=panel_obj.id
-                ).values_list("feature_id", flat=True)
-            )
 
             # gather provided genes
             for panel in ci_data["panels"]:
@@ -447,9 +442,22 @@ def check_if_ci_data_in_database(data: dict):
                     feature_obj = Feature.objects.get(gene__hgnc_id=gene)
                     features_from_form.add(feature_obj.id)
 
-            # compare features gathered
-            if features_from_database == features_from_form:
-                return True, (ci_obj.id, features_from_database)
+            versions_of_panel = PanelFeatures.objects.filter(
+                panel_id=panel_obj.id
+            ).values_list("panel_version", flat=True)
+
+            for version in versions_of_panel:
+                features_from_database = set(PanelFeatures.objects.filter(
+                        panel_id=panel_obj.id, panel_version=version
+                    ).values_list("feature_id", flat=True)
+                )
+
+                # compare features gathered
+                if features_from_database == features_from_form:
+                    return True, (
+                        ci_obj.id, ci_data["version"], panel_obj.id,
+                        version, features_from_form
+                    )
 
     return False, ()
 
