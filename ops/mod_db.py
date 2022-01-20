@@ -261,6 +261,10 @@ def import_panel_form_data(panel_form: str):
                         "handled with panel_ops v1.4.0"
                     ))
 
+                # get the latest version of a panel to increment it when
+                # creating panel feature links
+                latest_version = get_latest_version_panel(existing_panel_id)
+
             else:
                 # create panel
                 new_panel, panel_created = Panel.objects.get_or_create(
@@ -300,8 +304,6 @@ def import_panel_form_data(panel_form: str):
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
                 if add_on:
-                    latest_version = get_latest_version_panel(existing_panel_id)
-
                     # increment latest version appropriately and switch to a
                     # string for import in db
                     if latest_version[1] == "":
@@ -475,7 +477,7 @@ def get_latest_version_panel(panel_obj_id):
     # need to create link using info of possible existing add
     # on panel
     panel_versions = PanelFeatures.objects.filter(
-        id=panel_obj_id
+        panel_id=panel_obj_id
     ).values_list("panel_version", flat=True)
 
     panel_add_on_versions = []
