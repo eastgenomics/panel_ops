@@ -7,7 +7,9 @@ from packaging import version
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
-from .utils import parse_hgnc_dump, parse_g2t, parse_panel_form
+from .utils import (
+    parse_hgnc_dump, parse_g2t, parse_panel_form, get_latest_panel_version
+)
 
 sys.path.append(path_to_panel_palace)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "panel_palace.settings")
@@ -263,7 +265,11 @@ def import_panel_form_data(panel_form: str):
 
                 # get the latest version of a panel to increment it when
                 # creating panel feature links
-                latest_version = get_latest_version_panel(existing_panel_id)
+                panel_versions = PanelFeatures.objects.filter(
+                    panel_id=existing_panel_id
+                ).values_list("panel_version", flat=True)
+
+                latest_version = get_latest_panel_version(panel_versions)
 
             else:
                 # create panel
@@ -462,60 +468,3 @@ def check_if_ci_data_in_database(data: dict):
                     )
 
     return False, ()
-
-
-def get_latest_version_panel(panel_obj_id):
-    """ Get the latest version of a panel object
-
-    Args:
-        panel_obj_id (int): ID of Django panel object
-
-    Returns:
-        str: Latest version of given panel object
-    """
-
-    # need to create link using info of possible existing add
-    # on panel
-    panel_versions = PanelFeatures.objects.filter(
-        panel_id=panel_obj_id
-    ).values_list("panel_version", flat=True)
-
-    panel_add_on_versions = []
-
-    # parse panel versions that we can get the latest stored
-    for v in panel_versions:
-        if "|" in v:
-            versions = v.split("|")
-        else:
-            versions = [v, ""]
-
-        panel_add_on_versions.append(versions)
-
-    latest_version = None
-
-    for panel_version, add_on_version in panel_add_on_versions:
-        panel_version = version.parse(panel_version)
-        add_on_version = version.parse(add_on_version)
-
-        if latest_version:
-            # panel version is higher
-            if latest_version[0] < panel_version:
-                latest_version = [
-                    panel_version, add_on_version
-                ]
-            elif latest_version[0] == panel_version:
-                # panel versions are equal but add on version
-                # is higher
-                if latest_version[1] < add_on_version:
-                    latest_version = [
-                        panel_version, add_on_version
-                    ]
-        else:
-            # looking at first version so store first value
-            latest_version = [panel_version, add_on_version]
-
-    latest_version_str = [
-        str(latest_version[0]), str(latest_version[1])
-    ]
-
-    return latest_version_str
