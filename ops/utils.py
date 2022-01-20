@@ -1233,13 +1233,18 @@ def get_clinical_indication_through_genes(
 
         # use the packaging package to parse the version and take the latest
         # version
-        latest_version = max([version.parse(d[2]) for d in data])
+        latest_version = get_latest_panel_version([d[2] for d in data])
         panel_genes = [(d[0], d[2], d[3]) for d in data]
         hgnc_ids = []
 
         for panel, panel_version, hgnc_id in panel_genes:
+            if "|" in panel_version:
+                formatted_version = panel_version.split("|")
+            else:
+                formatted_version = [panel_version, ""]
+
             # only get genes that are in the latest version of a given panel
-            if version.parse(str(panel_version)) == latest_version:
+            if formatted_version == latest_version:
                 # filter gene if it's RNA
                 if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
                     continue
@@ -1255,6 +1260,8 @@ def get_clinical_indication_through_genes(
                     continue
 
                 hgnc_ids.append(hgnc_id)
+
+        latest_version = "|".join(latest_version).strip("|")
 
         gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
 
@@ -1335,3 +1342,49 @@ def validate_panel_form(metadata_df, gene_df):
     ), "Some essential fields in the metadata sheet are absent"
 
     assert set(gene_df.iloc[0:, 1]), "No genes are in the gene sheet"
+
+
+def get_latest_panel_version(panel_versions):
+    """ Get latest version of a panel
+
+    Args:
+        panel_versions (list): List of all versions of a particular panel
+
+    Returns:
+        list: Latest version as list to accomodate add on versions
+    """
+
+    panel_add_on_versions = []
+
+    # parse panel versions that we can get the latest stored
+    for panel_version in panel_versions:
+        if "|" in panel_version:
+            formatted_version = panel_version.split("|")
+        else:
+            formatted_version = [panel_version, ""]
+
+        panel_add_on_versions.append(formatted_version)
+
+    latest_version = None
+
+    for panel_version, add_on_version in panel_add_on_versions:
+        panel_version = version.parse(panel_version)
+        add_on_version = version.parse(add_on_version)
+
+        if latest_version:
+            # panel version is higher
+            if latest_version[0] < panel_version:
+                latest_version = [panel_version, add_on_version]
+
+            elif latest_version[0] == panel_version:
+                # panel versions are equal but add on version
+                # is higher
+                if latest_version[1] < add_on_version:
+                    latest_version = [panel_version, add_on_version]
+        else:
+            # looking at first version so store first value
+            latest_version = [panel_version, add_on_version]
+
+    latest_version_list = [str(latest_version[0]), str(latest_version[1])]
+
+    return latest_version_list
