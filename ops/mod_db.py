@@ -258,9 +258,9 @@ def import_panel_form_data(panel_form: str):
                 else:
                     raise Exception((
                         "2 panels are linked to the same clinical indication. "
-                        "Please note that clinical indications that are "
-                        "linked to multiple panels such as R144.1 are not "
-                        "handled with panel_ops v1.4.0"
+                        "Please note that add on form for clinical "
+                        "indications that are linked to multiple panels such "
+                        "as R144.1 are not handled with panel_ops v1.4.0"
                     ))
 
                 # get the latest version of a panel to increment it when
