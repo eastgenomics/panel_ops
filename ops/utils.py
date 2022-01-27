@@ -1220,50 +1220,49 @@ def get_clinical_indication_through_genes(
 
     gemini2genes = defaultdict(lambda: defaultdict(lambda: set()))
 
-    for ci in clinical_indications:
-        gemini_name, panel_id = ci
+    for ci, panels in clinical_indications.items():
+        for panel_id, ci_version in panels:
+            # query to get all genes from a panel id
+            data = session.query(
+                panel_tb.c.name, panel2features_tb.c.feature_id,
+                panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
+            ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
+                panel2features_tb.c.panel_id == panel_id
+            ).all()
 
-        # query to get all genes from a panel id
-        data = session.query(
-            panel_tb.c.name, panel2features_tb.c.feature_id,
-            panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
-        ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
-            panel2features_tb.c.panel_id == panel_id
-        ).all()
+            # use the packaging package to parse the version and take the latest
+            # version
+            latest_version = get_latest_panel_version([d[2] for d in data])
+            panel_genes = [(d[0], d[2], d[3]) for d in data]
+            hgnc_ids = []
 
-        # use the packaging package to parse the version and take the latest
-        # version
-        latest_version = get_latest_panel_version([d[2] for d in data])
-        panel_genes = [(d[0], d[2], d[3]) for d in data]
-        hgnc_ids = []
+            for panel, panel_version, hgnc_id in panel_genes:
+                if "|" in panel_version:
+                    formatted_version = panel_version.split("|")
+                else:
+                    formatted_version = [panel_version, ""]
 
-        for panel, panel_version, hgnc_id in panel_genes:
-            if "|" in panel_version:
-                formatted_version = panel_version.split("|")
-            else:
-                formatted_version = [panel_version, ""]
+                # only get genes that are in the latest version of a given panel
+                if formatted_version == latest_version:
+                    # filter gene if it's RNA
+                    if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
+                        continue
 
-            # only get genes that are in the latest version of a given panel
-            if formatted_version == latest_version:
-                # filter gene if it's RNA
-                if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
-                    continue
+                    # get rid of mitochondrial genes
+                    if filter_out_gene(
+                        hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
+                    ):
+                        continue
 
-                # get rid of mitochondrial genes
-                if filter_out_gene(
-                    hgnc_data[hgnc_id], "approved_name", "mitochondrially encoded"
-                ):
-                    continue
+                    # remove TRAC and IGHM genes from genepanels and manifest
+                    if hgnc_id in ["HGNC:12029", "HGNC:5541"]:
+                        continue
 
-                # remove TRAC and IGHM genes from genepanels and manifest
-                if hgnc_id in ["HGNC:12029", "HGNC:5541"]:
-                    continue
+                    hgnc_ids.append(hgnc_id)
 
-                hgnc_ids.append(hgnc_id)
+            latest_version = "|".join(latest_version).strip("|")
 
-        latest_version = "|".join(latest_version).strip("|")
-
-        gemini2genes[gemini_name][f"{panel}_{latest_version}"].update(hgnc_ids)
+            gemini2genes[ci][f"{panel}_{latest_version}"].update(hgnc_ids)
 
     return gemini2genes
 
@@ -1323,6 +1322,44 @@ def parse_panel_form(panel_form: str):
     }
 
     return data, add_on_bool
+
+
+def get_latest_clinical_indication_data(query_result):
+    """ Get the latest clinical indication data using ci_version field
+    Args:
+        query_result (SQLAlchemy query): Result of SQLAlchemy query
+    Returns:
+        dict: Dict containing the most recent clinical indication and its 
+        linked panels
+    """
+
+    ci2panels = {}
+
+    # get latest version of clinical indication
+    for ci in query_result:
+        gemini_name, panel_id, ci_version = ci
+        source, version = ci_version.split("_")
+        dated_version = datetime.date.fromisoformat(version)
+
+        # compare dates between stored date and new date
+        if gemini_name in ci2panels:
+            # all dates stored should have the same date so select first
+            # element of list of tuples and get the date of the ci2panel link
+            stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
+            dated_stored_version = datetime.date.fromisoformat(stored_version)
+
+            # if new date is higher replace all stored dates
+            if dated_version > dated_stored_version:
+                ci2panels[gemini_name] = [(panel_id, ci_version)]
+            # date identical we need to store the incoming date and panel id
+            elif dated_version == dated_stored_version:
+                ci2panels[gemini_name].append((panel_id, ci_version))
+
+        # unseen clinical indication
+        else:
+            ci2panels[gemini_name] = [(panel_id, ci_version)]
+
+    return ci2panels
 
 
 def validate_panel_form(metadata_df, gene_df):
