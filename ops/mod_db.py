@@ -7,7 +7,9 @@ from packaging import version
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
-from .utils import parse_hgnc_dump, parse_g2t, parse_panel_form
+from .utils import (
+    parse_hgnc_dump, parse_g2t, parse_panel_form, get_latest_panel_version
+)
 
 sys.path.append(path_to_panel_palace)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "panel_palace.settings")
@@ -210,12 +212,14 @@ def import_panel_form_data(panel_form: str):
 
     # check if the clinical indication data doesn't already exist in the
     # database
-    data_in_database = check_if_ci_data_in_database(data)
+    data_in_database, log_data = check_if_ci_data_in_database(data)
 
     if data_in_database:
+        ci_id, ci_version, panel_id, panel_version, features = log_data
         msg = (
-            "Please check that the data to be imported is not already in the "
-            "database"
+            "The clinical indication associated to this set of genes already "
+            f"exists: ci_id {ci_id} - {ci_version} -> panel_id {panel_id} - "
+            f"{panel_version} --> feature_id(s) {features}"
         )
         raise Exception(msg)
 
@@ -227,11 +231,9 @@ def import_panel_form_data(panel_form: str):
 
         # if it's an add on panel, get the ci object to reuse its attributes
         if add_on:
-            ci_object = ClinicalIndication.objects.get(
-                code=ci_data["add_on"]
+            existing_ci = ClinicalIndication.objects.get(
+                gemini_name__contains=ci_data["add_on"]
             )
-
-            gemini_name = ci_object.gemini_name
         else:
             # assign "C code" to bespoke clinical indication
             ci_id = assign_CUH_code(ci)
@@ -243,19 +245,44 @@ def import_panel_form_data(panel_form: str):
 
             # get the panel type matching the in-house type
             panel_type_id = PanelType.objects.get(type="in-house").id
-            # create panel
-            new_panel, panel_created = Panel.objects.get_or_create(
-                name=panel, panel_type_id=panel_type_id
-            )
 
-            assert panel_created is True, (
-                f"Panel {new_panel.name} already exists: {new_panel.id}"
-            )
+            if add_on:
+                # get the existing panel associated to the existing clinical
+                # indication
+                existing_panel_id = set(Panel.objects.filter(
+                    clinicalindicationpanels__clinical_indication_id=existing_ci.id
+                ).values_list("id", flat=True))
 
-            if panel_created:
-                msg = f"Panel {new_panel.name} created: {new_panel.id}"
+                if len(existing_panel_id) == 1:
+                    existing_panel_id = list(existing_panel_id)[0]
+                else:
+                    raise Exception((
+                        "2 panels are linked to the same clinical indication. "
+                        "Please note that add on form for clinical "
+                        "indications that are linked to multiple panels such "
+                        "as R144.1 are not handled with panel_ops v1.4.0"
+                    ))
 
-            output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+                # get the latest version of a panel to increment it when
+                # creating panel feature links
+                panel_versions = PanelFeatures.objects.filter(
+                    panel_id=existing_panel_id
+                ).values_list("panel_version", flat=True)
+
+                latest_version = get_latest_panel_version(panel_versions)
+
+            else:
+                # create panel
+                new_panel, panel_created = Panel.objects.get_or_create(
+                    name=panel, panel_type_id=panel_type_id
+                )
+
+                if panel_created:
+                    msg = f"Panel {new_panel.name} created: {new_panel.id}"
+                else:
+                    msg = f"Panel {new_panel.name} to get updated"
+
+                output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
             for gene in panel_data["genes"]:
                 # create gene
@@ -282,13 +309,37 @@ def import_panel_form_data(panel_form: str):
                     )
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
-                # create panel feature link
-                panel_feature_link = PanelFeatures.objects.get_or_create(
-                    panel_version=panel_data["version"],
-                    feature_id=new_feature.id, panel_id=new_panel.id
-                )
+                if add_on:
+                    # increment latest version appropriately and switch to a
+                    # string for import in db
+                    if latest_version[1] == "":
+                        version_to_import = f"{latest_version[0]}|1"
+                    else:
+                        version_to_import = (
+                            f"{latest_version[0]}|"
+                            f"{int(latest_version[1]) + 1}"
+                        )
 
-            if not add_on:
+                    panel_feature_link = PanelFeatures.objects.get_or_create(
+                        panel_version=version_to_import,
+                        feature_id=new_feature.id, panel_id=existing_panel_id
+                    )
+
+                else:
+                    # create panel feature link
+                    panel_feature_link = PanelFeatures.objects.get_or_create(
+                        panel_version=panel_data["version"],
+                        feature_id=new_feature.id, panel_id=new_panel.id
+                    )
+
+            if add_on:
+                # just create links from the clinical indication to the
+                # existing panel and the add on panel
+                ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
+                    clinical_indication_id=existing_ci.id,
+                    panel_id=existing_panel_id, ci_version=ci_data["version"]
+                )
+            else:
                 # create clinical indication
                 new_ci, ci_created = ClinicalIndication.objects.get_or_create(
                     name=ci, gemini_name=gemini_name, code=ci_id
@@ -301,15 +352,11 @@ def import_panel_form_data(panel_form: str):
                 )
 
                 if ci_created:
-                    msg = f"Clinical indication {new_ci.name} created: {new_ci.id}"
+                    msg = (
+                        f"Clinical indication {new_ci.name} created: "
+                        f"{new_ci.id}"
+                    )
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
-            else:
-                # just create links from the clinical indication to the
-                # existing panel and the add on panel
-                ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
-                    clinical_indication_id=ci_object.id, panel_id=new_panel.id,
-                    ci_version=ci_data["version"]
-                )
 
     msg = f"Finished importing {panel_form}"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
@@ -371,29 +418,53 @@ def check_if_ci_data_in_database(data: dict):
     for ci in data:
         ci_data = data[ci]
 
-        for panel in ci_data["panels"]:
-            panel_data = ci_data["panels"][panel]
+        features_from_form = set()
+        fields_to_filter_with = {
+            "clinicalindicationpanels__ci_version": ci_data["version"]
+        }
 
-            # get panel ids that match new panel name and version
-            panels_check = PanelFeatures.objects.filter(
-                panel__name=panel, panel_version=panel_data["version"]
-            ).values_list("panel_id", flat=True)
+        if ci_data["add_on"]:
+            # use R code used in form to find clinical indication
+            fields_to_filter_with["code"] = ci_data["add_on"]
+        else:
+            # use name of bespoke clinical indication to find it
+            fields_to_filter_with["name"] = ci
 
-            # get clinical indications that match new ci and version + panel_id
-            # that way we get clinical indication + panel link
-            ci_panels_check = ClinicalIndicationPanels.objects.filter(
-                clinical_indication__name=ci,
-                ci_version=ci_data["version"],
-                panel_id__in=panels_check
-            )
+        ci_obj = ClinicalIndication.objects.filter(
+            **fields_to_filter_with
+        )
 
-            # panel to be imported exists and a link from ci to panel exists
-            if (panels_check and ci_panels_check):
-                msg = (
-                    f"Combination of '{ci}' {ci_data['version']} with panel "
-                    f"'{panel}' {panel_data['version']} already exists"
+        if ci_obj:
+            ci_obj = ci_obj.get()
+            # gather genes from latest panel version
+            panel_obj = Panel.objects.filter(
+                clinicalindicationpanels__clinical_indication_id=ci_obj.id
+            ).distinct().get()
+
+            # gather provided genes
+            for panel in ci_data["panels"]:
+                panel_data = ci_data["panels"][panel]
+
+                for gene in panel_data["genes"]:
+                    # get the feature id for the genes
+                    feature_obj = Feature.objects.get(gene__hgnc_id=gene)
+                    features_from_form.add(feature_obj.id)
+
+            versions_of_panel = PanelFeatures.objects.filter(
+                panel_id=panel_obj.id
+            ).values_list("panel_version", flat=True)
+
+            for version in versions_of_panel:
+                features_from_database = set(PanelFeatures.objects.filter(
+                        panel_id=panel_obj.id, panel_version=version
+                    ).values_list("feature_id", flat=True)
                 )
-                output_to_loggers(msg, "warning", CONSOLE, MOD_DB)
-                return True
 
-    return False
+                # compare features gathered
+                if features_from_database == features_from_form:
+                    return True, (
+                        ci_obj.id, ci_data["version"], panel_obj.id,
+                        version, features_from_form
+                    )
+
+    return False, ()

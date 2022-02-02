@@ -70,9 +70,8 @@ def check_db(
 
     # check if errors in the total number of panels
     if global_panel_errors is not None:
-        for error in global_panel_errors:
-            error_detected = True
-            CHECK.error(error)
+        error_detected = True
+        CHECK.error(global_panel_errors)
 
     g2t_errors = check_g2t(
         session, gene_dict, g2t_data, gene_tb, g2t_tb, transcript_tb

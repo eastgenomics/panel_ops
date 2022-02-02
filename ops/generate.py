@@ -2,12 +2,12 @@ import json
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, write_new_output_folder, parse_gemini_dump, filter_out_gene,
+    get_date, write_new_output_folder, parse_gemini_dump,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
     gather_transcripts, gather_clinical_indication_data_django_json,
-    get_clinical_indication_through_genes
+    get_clinical_indication_through_genes, get_latest_clinical_indication_data
 )
 
 
@@ -79,13 +79,15 @@ def generate_genepanels(session, meta, hgnc_data: dict):
 
     # get the gemini names and associated panels ids
     cis = session.query(
-        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
+        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id, ci2panels_tb.c.ci_version
     ).join(
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).all()
 
+    ci2panels = get_latest_clinical_indication_data(cis)
+
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, cis, hgnc_data
+        session, meta, ci2panels, hgnc_data
     )
 
     # we want a pretty file so store the data in a nice way
@@ -264,8 +266,10 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
         ci_tb.c.gemini_name.in_(uniq_used_panels)
     ).all()
 
+    ci2panels = get_latest_clinical_indication_data(ci_in_manifest)
+
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci_in_manifest, hgnc_data
+        session, meta, ci2panels, hgnc_data
     )
 
     # we want a pretty file so store the data that we want to output in a nice
