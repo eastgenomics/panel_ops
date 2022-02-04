@@ -259,7 +259,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
 
     # get the gemini names and associated genes and panels ids
     ci_in_manifest = session.query(
-        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id
+        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id, ci2panels_tb.c.ci_version
     ).join(
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).filter(

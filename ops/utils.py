@@ -1294,7 +1294,7 @@ def parse_panel_form(panel_form: str):
     add_on = metadata_df.iat[6, 1]
     ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
 
-    if add_on:
+    if pd.notna(add_on):
         # add on clinical indication version
         ci_version = f"AO_{ci_version}"
         add_on_bool = True
