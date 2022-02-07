@@ -226,6 +226,9 @@ def import_panel_form_data(panel_form: str):
     msg = f"Importing {panel_form} into panel palace"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
+    # bool to indicate if single gene panels are involved
+    single_gene_panel = False
+
     for ci in data:
         ci_data = data[ci]
 
@@ -244,37 +247,53 @@ def import_panel_form_data(panel_form: str):
             panel_data = ci_data["panels"][panel]
 
             # get the panel type matching the in-house type
-            panel_type_id = PanelType.objects.get(type="in-house").id
+            in_house_panel_type_id = PanelType.objects.get(type="in-house").id
 
             if add_on:
-                # get the existing panel associated to the existing clinical
+                # get the existing panels associated to the existing clinical
                 # indication
-                existing_panel_id = set(Panel.objects.filter(
+                existing_panel_ids = set(Panel.objects.filter(
                     clinicalindicationpanels__clinical_indication_id=existing_ci.id
                 ).values_list("id", flat=True))
 
-                if len(existing_panel_id) == 1:
-                    existing_panel_id = list(existing_panel_id)[0]
+                if len(existing_panel_ids) == 1:
+                    existing_panel_id = list(existing_panel_ids)[0]
+
+                    # get the latest version of a panel to increment it when
+                    # creating panel feature links
+                    panel_versions = PanelFeatures.objects.filter(
+                        panel_id=existing_panel_id
+                    ).values_list("panel_version", flat=True)
+
+                    latest_version = get_latest_panel_version(panel_versions)
                 else:
-                    raise Exception((
-                        "2 panels are linked to the same clinical indication. "
-                        "Please note that add on form for clinical "
-                        "indications that are linked to multiple panels such "
-                        "as R144.1 are not handled with panel_ops v1.4.0"
-                    ))
+                    # go through the ids to see if only single gene panels are
+                    # associated
+                    for existing_panel_id in existing_panel_ids:
+                        # this filtering works as a check because single gene
+                        # panels are untangible
+                        panel = PanelFeatures.objects.filter(
+                            panel_id=existing_panel_id
+                        )
 
-                # get the latest version of a panel to increment it when
-                # creating panel feature links
-                panel_versions = PanelFeatures.objects.filter(
-                    panel_id=existing_panel_id
-                ).values_list("panel_version", flat=True)
+                        # looking through the panels associated with the
+                        # clinical indication, check if one of them is a "real"
+                        # panel because we don't want to modify a single gene
+                        # panel
+                        if len(panel) > 1:
+                            raise Exception((
+                                "2 not single gene panels are linked to the "
+                                "same clinical indication. Please note that "
+                                "add on form for clinical indications that "
+                                "are linked to multiple non single genepanels"
+                            ))
 
-                latest_version = get_latest_panel_version(panel_versions)
+                    single_gene_panel = True
 
             else:
                 # create panel
                 new_panel, panel_created = Panel.objects.get_or_create(
-                    name=panel, panel_type_id=panel_type_id
+                    name=panel, panel_type_id=in_house_panel_type_id
                 )
 
                 if panel_created:
@@ -310,20 +329,64 @@ def import_panel_form_data(panel_form: str):
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
                 if add_on:
-                    # increment latest version appropriately and switch to a
-                    # string for import in db
-                    if latest_version[1] == "":
-                        version_to_import = f"{latest_version[0]}|1"
-                    else:
-                        version_to_import = (
-                            f"{latest_version[0]}|"
-                            f"{int(latest_version[1]) + 1}"
+                    if single_gene_panel:
+                        # this should return only one result because we use the
+                        # feature id and the HGNC pattern in the naming of
+                        # the panel which is only used for single gene panels
+                        candidate_panel_ids = PanelFeatures.objects.filter(
+                            feature_id=new_feature,
+                            panel__name__contains="HGNC"
+                        ).values_list(
+                            "panel_id", flat=True
                         )
 
-                    panel_feature_link = PanelFeatures.objects.get_or_create(
-                        panel_version=version_to_import,
-                        feature_id=new_feature.id, panel_id=existing_panel_id
-                    )
+                        # multiple single gene panels linked to the same gene?
+                        if len(candidate_panel_ids) > 1:
+                            raise Exception((
+                                f"Check {candidate_panel_ids} for single gene"
+                                "panels weirdness"
+                            ))
+                        elif len(candidate_panel_ids) == 1:
+                            # need to link existing panel
+                            sg_panel = Panel.objects.get_or_create(
+                                name=f"{gene}_SG_panel",
+                                panel_type_id=in_house_panel_type_id
+                            )
+                        else:
+                            # create a panel
+                            sg_panel = Panel.objects.get_or_create(
+                                name=f"{gene}_SG_panel",
+                                panel_type_id=in_house_panel_type_id
+                            )
+
+                            # create the link between panel and feature
+                            panel_feature_link = PanelFeatures.objects.get_or_create(
+                                panel_version="1.0.0",
+                                feature_id=new_feature.id, panel_id=sg_panel.id
+                            )
+
+                        # create link between ci and single gene panel if the
+                        # panel was either found or created
+                        ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
+                            clinical_indication_id=existing_ci.id,
+                            panel_id=sg_panel.id, ci_version=ci_data["version"]
+                        )
+
+                    else:
+                        # increment latest version appropriately and switch to
+                        # a string for import in db
+                        if latest_version[1] == "":
+                            version_to_import = f"{latest_version[0]}|1"
+                        else:
+                            version_to_import = (
+                                f"{latest_version[0]}|"
+                                f"{int(latest_version[1]) + 1}"
+                            )
+
+                        panel_feature_link = PanelFeatures.objects.get_or_create(
+                            panel_version=version_to_import,
+                            feature_id=new_feature.id, panel_id=existing_panel_id
+                        )
 
                 else:
                     # create panel feature link
@@ -333,12 +396,13 @@ def import_panel_form_data(panel_form: str):
                     )
 
             if add_on:
-                # just create links from the clinical indication to the
-                # existing panel and the add on panel
-                ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
-                    clinical_indication_id=existing_ci.id,
-                    panel_id=existing_panel_id, ci_version=ci_data["version"]
-                )
+                if single_gene_panel is False:
+                    # just create links from the clinical indication to the
+                    # existing panel and the add on panel
+                    ci_panel_link = ClinicalIndicationPanels.objects.get_or_create(
+                        clinical_indication_id=existing_ci.id,
+                        panel_id=existing_panel_id, ci_version=ci_data["version"]
+                    )
             else:
                 # create clinical indication
                 new_ci, ci_created = ClinicalIndication.objects.get_or_create(
