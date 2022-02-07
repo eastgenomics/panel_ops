@@ -289,7 +289,9 @@ def import_panel_form_data(panel_form: str):
                             ))
 
                     single_gene_panel = True
-
+                    sg_panel_type_id = PanelType.objects.get(
+                        type="single_gene"
+                    ).id
             else:
                 # create panel
                 new_panel, panel_created = Panel.objects.get_or_create(
@@ -348,17 +350,16 @@ def import_panel_form_data(panel_form: str):
                             ))
                         elif len(candidate_panel_ids) == 1:
                             # need to link existing panel
-                            sg_panel = Panel.objects.get_or_create(
+                            sg_panel, sg_panel_created = Panel.objects.get_or_create(
                                 name=f"{gene}_SG_panel",
-                                panel_type_id=in_house_panel_type_id
+                                panel_type_id=sg_panel_type_id
                             )
                         else:
                             # create a panel
-                            sg_panel = Panel.objects.get_or_create(
+                            sg_panel, sg_panel_created = Panel.objects.get_or_create(
                                 name=f"{gene}_SG_panel",
-                                panel_type_id=in_house_panel_type_id
+                                panel_type_id=sg_panel_type_id
                             )
-
                             # create the link between panel and feature
                             panel_feature_link = PanelFeatures.objects.get_or_create(
                                 panel_version="1.0.0",
@@ -494,16 +495,18 @@ def check_if_ci_data_in_database(data: dict):
             # use name of bespoke clinical indication to find it
             fields_to_filter_with["name"] = ci
 
-        ci_obj = ClinicalIndication.objects.filter(
-            **fields_to_filter_with
+        ci_obj_id = set(
+            ClinicalIndication.objects.filter(
+                **fields_to_filter_with
+            ).values_list("id", flat=True)
         )
 
-        if ci_obj:
-            ci_obj = ci_obj.get()
+        if ci_obj_id:
+            ci_obj_id = list(ci_obj_id)[0]
             # gather genes from latest panel version
-            panel_obj = Panel.objects.filter(
-                clinicalindicationpanels__clinical_indication_id=ci_obj.id
-            ).distinct().get()
+            panel_objs = Panel.objects.filter(
+                clinicalindicationpanels__clinical_indication_id=ci_obj_id
+            ).distinct()
 
             # gather provided genes
             for panel in ci_data["panels"]:
@@ -515,19 +518,21 @@ def check_if_ci_data_in_database(data: dict):
                     features_from_form.add(feature_obj.id)
 
             versions_of_panel = PanelFeatures.objects.filter(
-                panel_id=panel_obj.id
+                panel_id__in=panel_objs
             ).values_list("panel_version", flat=True)
 
             for version in versions_of_panel:
-                features_from_database = set(PanelFeatures.objects.filter(
-                        panel_id=panel_obj.id, panel_version=version
+                features_from_database = set(
+                    PanelFeatures.objects.filter(
+                        panel_id__in=panel_objs, panel_version=version
                     ).values_list("feature_id", flat=True)
                 )
 
                 # compare features gathered
                 if features_from_database == features_from_form:
                     return True, (
-                        ci_obj.id, ci_data["version"], panel_obj.id,
+                        ci_obj_id, ci_data["version"],
+                        ";".join([str(panel_obj.id) for panel_obj in panel_objs]),
                         version, features_from_form
                     )
 
