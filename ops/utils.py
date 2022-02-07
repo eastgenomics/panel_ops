@@ -1301,6 +1301,7 @@ def parse_panel_form(panel_form: str):
     else:
         # bespoke clinical indication version
         ci_version = f"BP_{ci_version}"
+        add_on = None
         add_on_bool = False
 
     # get unique hgnc ids from the gene sheet
@@ -1310,7 +1311,7 @@ def parse_panel_form(panel_form: str):
     data = {
         clinical_indication: {
             "version": ci_version,
-            "add_on": add_on_bool,
+            "add_on": add_on,
             "panels": {
                 panel: {
                     "genes": genes,
