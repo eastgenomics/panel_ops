@@ -504,9 +504,9 @@ def check_if_ci_data_in_database(data: dict):
         if ci_obj_id:
             ci_obj_id = list(ci_obj_id)[0]
             # gather genes from latest panel version
-            panel_objs = Panel.objects.filter(
+            panel_ids = Panel.objects.filter(
                 clinicalindicationpanels__clinical_indication_id=ci_obj_id
-            ).distinct()
+            ).distinct().values_list("id", flat=True)
 
             # gather provided genes
             for panel in ci_data["panels"]:
@@ -518,13 +518,13 @@ def check_if_ci_data_in_database(data: dict):
                     features_from_form.add(feature_obj.id)
 
             versions_of_panel = PanelFeatures.objects.filter(
-                panel_id__in=panel_objs
+                panel_id__in=panel_ids
             ).values_list("panel_version", flat=True)
 
             for version in versions_of_panel:
                 features_from_database = set(
                     PanelFeatures.objects.filter(
-                        panel_id__in=panel_objs, panel_version=version
+                        panel_id__in=panel_ids, panel_version=version
                     ).values_list("feature_id", flat=True)
                 )
 
@@ -532,7 +532,7 @@ def check_if_ci_data_in_database(data: dict):
                 if features_from_database == features_from_form:
                     return True, (
                         ci_obj_id, ci_data["version"],
-                        ";".join([str(panel_obj.id) for panel_obj in panel_objs]),
+                        ";".join([str(panel_id) for panel_id in panel_ids]),
                         version, features_from_form
                     )
 
