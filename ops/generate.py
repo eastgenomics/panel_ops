@@ -9,7 +9,7 @@ from .utils import (
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
     gather_transcripts, gather_clinical_indication_data_django_json,
-    get_clinical_indication_through_genes
+    get_clinical_indication_through_genes, get_latest_clinical_indication_data
 )
 
 

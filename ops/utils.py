@@ -1219,7 +1219,6 @@ def get_clinical_indication_through_genes(session, meta, clinical_indications):
 
     # flatten list of tuples that come out of SQLAlchemy
     flatten_RNA_genes = set([gene for (gene,) in gene_query])
-
     for ci, panels in clinical_indications.items():
         for panel_id, ci_version in panels:
             # query to get all genes from a panel id
@@ -1268,14 +1267,20 @@ def parse_panel_form(panel_form: str):
     metadata_df = pd.read_excel(panel_form, sheet_name="Admin details")
     gene_df = pd.read_excel(panel_form, sheet_name="Gene list")
 
+    validate_panel_form(metadata_df, gene_df)
+
     # get data from hardcoded locations in the metadata sheet
     clinical_indication = metadata_df.iat[2, 1]
-    ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
     panel = metadata_df.iat[3, 1]
-    panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
-    add_on = metadata_df.iat[6, 1]
+    panel_version = ""
 
-    if add_on:
+    if pd.notna(metadata_df.iat[4, 1]):
+        panel_version = re.sub("[^0-9^.]", "", metadata_df.iat[4, 1])
+
+    add_on = metadata_df.iat[6, 1]
+    ci_version = metadata_df.iat[9, 1].strftime("%Y-%m-%d")
+
+    if pd.notna(add_on):
         # add on clinical indication version
         ci_version = f"AO_{ci_version}"
         add_on_bool = True
