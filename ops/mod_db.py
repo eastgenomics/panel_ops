@@ -423,6 +423,23 @@ def import_panel_form_data(panel_form: str):
                     )
                     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
+                # get panel id already linked to clinical indication
+                existing_panels = Panel.objects.filter(
+                    clinicalindicationpanels__clinical_indication_id=ci_object.id
+                ).all()
+
+                # gather genes from existing panels
+                existing_panel_features = PanelFeatures.objects.filter(
+                    panel_id__in=existing_panels
+                ).all()
+
+                for existing_panel_feature in existing_panel_features:
+                    panel_feature_link = PanelFeatures.objects.get_or_create(
+                        panel_version=panel_data["version"],
+                        feature_id=existing_panel_feature.feature_id,
+                        panel_id=new_panel.id
+                    )
+
     msg = f"Finished importing {panel_form}"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 

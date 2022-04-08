@@ -1,8 +1,10 @@
+from collections import defaultdict
+from datetime import date
 import json
 
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    get_date, write_new_output_folder, parse_gemini_dump,
+    get_date, get_latest_clinical_indication_data, write_new_output_folder, parse_gemini_dump,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
@@ -58,7 +60,7 @@ def generate_panelapp_tsvs(all_panels: dict, type_panel: str):
     return output_folder
 
 
-def generate_genepanels(session, meta, hgnc_data: dict):
+def generate_genepanels(session, meta):
     """ Generate gene panels file
 
     Args:
@@ -85,9 +87,8 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     ).all()
 
     ci2panels = get_latest_clinical_indication_data(cis)
-
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci2panels, hgnc_data
+        session, meta, ci2panels
     )
 
     # we want a pretty file so store the data in a nice way
@@ -228,7 +229,7 @@ def generate_django_jsons(
     return output_folder
 
 
-def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
+def generate_manifest(session, meta, gemini_dump: str):
     """ Generate new bioinformatic manifest for the new database
 
     Args:
@@ -251,7 +252,7 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     ci_tb = meta.tables["clinical_indication"]
     ci2panels_tb = meta.tables["clinical_indication_panels"]
 
-    uniq_used_panels = set([
+    uniq_used_clinical_indications = set([
         panel
         for ele in sample2gemini_name.values()
         for panel in ele
@@ -263,13 +264,12 @@ def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
     ).join(
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).filter(
-        ci_tb.c.gemini_name.in_(uniq_used_panels)
+        ci_tb.c.gemini_name.in_(uniq_used_clinical_indications)
     ).all()
 
     ci2panels = get_latest_clinical_indication_data(ci_in_manifest)
-
     gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci2panels, hgnc_data
+        session, meta, ci2panels
     )
 
     # we want a pretty file so store the data that we want to output in a nice
