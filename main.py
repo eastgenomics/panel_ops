@@ -250,7 +250,9 @@ def main(**param):
                     ele.split("=")[0]: ele.split("=")[1]
                     for ele in param["update_panelapp"]
                 }
-                ops.mod_db.update_panelapp_panel(panel_info)
+                ops.mod_db.update_panelapp_panel(
+                    panel_info["panelapp_id"], panel_info["version"]
+                )
 
             if param["update_panelapp_bulk"]:
                 panels = ops.utils.parse_panelapp_update_file(
@@ -258,7 +260,9 @@ def main(**param):
                 )
 
                 for panel in panels:
-                    ops.mod_db.update_panelapp_panel(panel)
+                    ops.mod_db.update_panelapp_panel(
+                        panel["panelapp_id"], panel["version"]
+                    )
 
 
 if __name__ == "__main__":
