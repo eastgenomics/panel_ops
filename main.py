@@ -89,6 +89,12 @@ def parse_args():
             "following format: panelapp_id=ID,version=VERSION"
         )
     )
+    mod_db.add_argument(
+        "-update_panelapp_bulk", "--update_panelapp_bulk", help=(
+            "Provide file with two columns with panelapp id in the first and "
+            "the required version in the second"
+        )
+    )
 
     args = vars(parser.parse_args())
 
@@ -245,6 +251,14 @@ def main(**param):
                     for ele in param["update_panelapp"]
                 }
                 ops.mod_db.update_panelapp_panel(panel_info)
+
+            if param["update_panelapp_bulk"]:
+                panels = ops.utils.parse_panelapp_update_file(
+                    param["update_panelapp_bulk"]
+                )
+
+                for panel in panels:
+                    ops.mod_db.update_panelapp_panel(panel)
 
 
 if __name__ == "__main__":
