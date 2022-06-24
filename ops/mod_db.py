@@ -3,12 +3,13 @@ import os
 import sys
 
 import django
-from packaging import version
+from panelapp import Panelapp
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
 from .utils import (
-    parse_hgnc_dump, parse_g2t, parse_panel_form, get_latest_panel_version
+    get_date, parse_hgnc_dump, parse_g2t, parse_panel_form,
+    get_latest_panel_version
 )
 
 sys.path.append(path_to_panel_palace)
@@ -425,6 +426,79 @@ def import_panel_form_data(panel_form: str):
 
     msg = f"Finished importing {panel_form}"
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
+
+
+def update_panelapp_panel(panelapp_id: int, version: str):
+    """ Update panelapp panel using id and version
+
+    Args:
+        panelapp_id (int): Panelapp panel id
+        version (str): Version to update to
+
+    Raises:
+        Exception: Check whether panelapp panel genes are in the database
+        Exception: Check whether the given version of panelapp panel already
+        has a link to the genes
+    """
+
+    # get panelapp panel
+    panel = Panelapp.Panel(panelapp_id, version)
+    genes = [gene["hgnc_id"] for gene in panel.get_genes(3)]
+    # get all genes in database
+    db_genes = Gene.objects.all().values_list("hgnc_id", flat=True)
+
+    missing_genes = []
+
+    # check all genes are present in the database
+    for gene in genes:
+        if gene not in db_genes:
+            missing_genes.append(gene)
+
+    if missing_genes:
+        raise Exception(
+            "The following genes are not present in the database: "
+            f"{missing_genes}"
+        )
+
+    # create description
+    description = f"Panelapp update {get_date()}"
+
+    # get the panel id of the panelapp panel
+    db_panel_id = Panel.objects.get(panelapp_id=panelapp_id).id
+
+    output_to_loggers(
+        f"Importing '{panel.name}' version '{version}'",
+        "info", CONSOLE, MOD_DB
+    )
+
+    for gene in genes:
+        # get the feature id of the gene
+        db_feature_id = Feature.objects.get(gene__hgnc_id=gene).id
+
+        # check if panel version already linked to feature
+        panel_link = PanelFeatures.objects.filter(
+            panel_version=version, feature_id=db_feature_id,
+            panel_id=db_panel_id
+        )
+
+        if panel_link:
+            raise Exception((
+                f"That version '{version}' of the panel '{panelapp_id}' is "
+                f"already linked to that feature '{db_feature_id}'"
+            ))
+
+        # create panel feature
+        panel_feature, created = PanelFeatures.objects.get_or_create(
+            panel_version=version, description=description,
+            feature_id=db_feature_id, panel_id=db_panel_id
+        )
+
+        if created:
+            output_to_loggers(
+                f"Panel '{panel.name}' version '{version}' link to "
+                f"{db_feature_id} has been created",
+                "info", CONSOLE, MOD_DB
+            )
 
 
 def assign_CUH_code(clinical_indication: str):

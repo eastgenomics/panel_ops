@@ -1425,3 +1425,24 @@ def get_latest_panel_version(panel_versions):
     latest_version_list = [str(latest_version[0]), str(latest_version[1])]
 
     return latest_version_list
+
+
+def parse_panelapp_update_file(panelapp_file: str):
+    """ Parse panelapp file
+
+    Args:
+        panelapp_file (str): File containing panelapp panel id to update and
+        their new version
+
+    Returns:
+        list: List of dict for panelapp info for panels to update
+    """ 
+
+    data = []
+
+    with open(panelapp_file) as f:
+        for line in f:
+            panelapp_id, version = line.strip().split()
+            data.append({"panelapp_id": panelapp_id, "version": version})
+
+    return data

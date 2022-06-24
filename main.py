@@ -1,23 +1,3 @@
-#!/usr/bin/python3
-
-""" Panel operations
-
-3 subparsers:
-- check: Check the panelapp dump folder given against the database
-- generate:
-    - panelapp_gms: Generate panelapp dump using only GMS panels
-    - panelapp_all: Generate panelapp dump using all panels
-    - gene_files: Generate files for panels with gene symbols only
-    - json: Generate django fixture using panelapp dump folder
-    - genepanels: Generate genepanels file
-    - manifest: Generate manifest type file for reports using Gemini db dump
-- mod_db:
-    - initial_import: Import given django fixture in the database
-    - hgnc: Import HGNC data dump in the database
-    - g2t: Update transcripts status/clinical transcript + new genes and
-    transcripts
-"""
-
 import argparse
 import sys
 
@@ -101,6 +81,19 @@ def parse_args():
     )
     mod_db.add_argument(
         "-new_panel", "--new_panel", help="Panel form xls file"
+    )
+    mod_db.add_argument(
+        "-update_panelapp", "--update_panelapp", metavar="KEY=VALUE", nargs=2,
+        help=(
+            "Provide panelapp id and panelapp panel version using the "
+            "following format: panelapp_id=ID,version=VERSION"
+        )
+    )
+    mod_db.add_argument(
+        "-update_panelapp_bulk", "--update_panelapp_bulk", help=(
+            "Provide file with two columns with panelapp id in the first and "
+            "the required version in the second"
+        )
     )
 
     args = vars(parser.parse_args())
@@ -251,6 +244,25 @@ def main(**param):
 
             if param["new_panel"]:
                 ops.mod_db.import_panel_form_data(param["new_panel"])
+
+            if param["update_panelapp"]:
+                panel_info = {
+                    ele.split("=")[0]: ele.split("=")[1]
+                    for ele in param["update_panelapp"]
+                }
+                ops.mod_db.update_panelapp_panel(
+                    panel_info["panelapp_id"], panel_info["version"]
+                )
+
+            if param["update_panelapp_bulk"]:
+                panels = ops.utils.parse_panelapp_update_file(
+                    param["update_panelapp_bulk"]
+                )
+
+                for panel in panels:
+                    ops.mod_db.update_panelapp_panel(
+                        panel["panelapp_id"], panel["version"]
+                    )
 
 
 if __name__ == "__main__":
