@@ -95,6 +95,11 @@ def parse_args():
             "the required version in the second"
         )
     )
+    mod_db.add_argument(
+        "-update_ci", "--update_clinical_indication", help=(
+            "Provide file with the clinical indications to need updating"
+        )
+    )
 
     args = vars(parser.parse_args())
 
@@ -263,6 +268,14 @@ def main(**param):
                     ops.mod_db.update_panelapp_panel(
                         panel["panelapp_id"], panel["version"]
                     )
+
+            if param["update_clinical_indication"]:
+                update_data = ops.utils.parse_clinical_indication_update_file(
+                    param["update_clinical_indication"]
+                )
+
+                for r_code, ci_data in update_data.items():
+                    ops.mod_db.update_clinical_indication(r_code, ci_data)
 
 
 if __name__ == "__main__":
