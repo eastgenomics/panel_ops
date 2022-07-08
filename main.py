@@ -96,8 +96,8 @@ def parse_args():
         )
     )
     mod_db.add_argument(
-        "-update_ci", "--update_clinical_indication", help=(
-            "Provide file with the clinical indications to need updating"
+        "-deploy_td", "--deploy_test_directory", help=(
+            "Output file from test_directory_parser"
         )
     )
 
@@ -269,13 +269,12 @@ def main(**param):
                         panel["panelapp_id"], panel["version"]
                     )
 
-            if param["update_clinical_indication"]:
-                update_data = ops.utils.parse_clinical_indication_update_file(
-                    param["update_clinical_indication"]
+            if param["deploy_test_directory"]:
+                td_data = ops.utils.parse_json_file(
+                    param["deploy_test_directory"]
                 )
 
-                for r_code, ci_data in update_data.items():
-                    ops.mod_db.update_clinical_indication(r_code, ci_data)
+                ops.mod_db.deploy_test_directory(td_data)
 
 
 if __name__ == "__main__":
