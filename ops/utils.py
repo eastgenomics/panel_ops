@@ -1,5 +1,6 @@
 from collections import defaultdict, OrderedDict
 import datetime
+import json
 import os
 import re
 from pathlib import Path
@@ -1436,7 +1437,7 @@ def parse_panelapp_update_file(panelapp_file: str):
 
     Returns:
         list: List of dict for panelapp info for panels to update
-    """ 
+    """
 
     data = []
 
@@ -1448,41 +1449,6 @@ def parse_panelapp_update_file(panelapp_file: str):
     return data
 
 
-def parse_clinical_indication_update_file(clinical_indication_file: str):
-    """ Parse clinical indication update file
-
-    Args:
-        clinical_indication_file (str): File containing clinical indication
-        data
-
-    Raises:
-        Exception: if an "addition" clinical indication doesn't have a panel
-
-    Returns:
-        dict: Dict containing info for every clinical indication
-    """
-
-    data = {}
-
-    with open(clinical_indication_file) as f:
-        for line in f:
-            info = line.strip().split("\t")
-
-            # get basic info per clinical indication
-            code, name, action = info[:3]
-            if code not in data:
-                data[code] = {
-                    "name": name, "action": action
-                }
-
-            # add panel info if it is an addition
-            if len(info) > 3 and action == "Addition":
-                panelapp_id, version = info[3:]
-                data[code].setdefault("panels", []).append({
-                    "panelapp_id": panelapp_id, "version": version
-                })
-            # raise error if no panels given for an addition
-            elif action == "Addition" and len(info) <= 3:
-                raise Exception(f"No panels specified for {code}")
-
-    return data
+def parse_json_file(json_file: str):
+    with open(json_file) as f:
+        return json.load(f)
