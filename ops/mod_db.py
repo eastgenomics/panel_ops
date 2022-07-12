@@ -3,7 +3,9 @@ import os
 import sys
 
 import django
-from panelapp import Panelapp
+from panelapp import Panelapp, queries
+from packaging import version
+import regex
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
@@ -500,6 +502,26 @@ def update_panelapp_panel(panelapp_id: int, version: str):
                 "info", CONSOLE, MOD_DB
             )
 
+    return db_panel_id
+
+
+def deploy_test_directory(td_data):
+
+    output_to_loggers(
+        "Starting test directory deployment...", "info", MOD_DB, CONSOLE
+    )
+
+    signedoff_panels = queries.get_all_signedoff_panels()
+
+    for indication in td_data["indications"]:
+        clinical_indication = gather_clinical_indication(
+            indication["code"], indication["name"], indication["gemini_name"]
+        )
+        panels = gather_panels(indication["panels"], signedoff_panels)
+
+
+############ UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
+
 
 def assign_CUH_code(clinical_indication: str):
     """ Assign new CUH code to clinical indication
@@ -611,3 +633,77 @@ def check_if_ci_data_in_database(data: dict):
                     )
 
     return False, ()
+
+
+def gather_clinical_indication(r_code, clinical_indication_name, gemini_name):
+    clinical_indication = ClinicalIndication.objects.get(
+        code=r_code, name=clinical_indication_name, gemini_name=gemini_name
+    )
+
+    if clinical_indication:
+        # clinical indication exists in current database
+        return clinical_indication
+    else:
+        # clinical indication needs creating
+        clinical_indication = ClinicalIndication(
+            code=r_code, name=clinical_indication_name, gemini_name=gemini_name
+        )
+        return clinical_indication
+
+
+def gather_panels(panels, signedoff_panels):
+    output_panels = []
+    single_gene = PanelType.objects.get(type="single_gene")
+    panelapp_panel = PanelType.objects.get(type="gms")
+
+    if panels:
+        # check panel existence
+        for panel in panels:
+            # few None sprinkled here and there
+            if panel:
+                if regex.match(r"HGNC:[0-9]+", panel):
+                    # filter using the single gene and the SG panel
+                    pf_link = PanelFeatures.objects.get(
+                        feature__gene__hgnc_id=panel,
+                        panel__name__iregex=r".*_SG_panel$"
+                    )
+
+                    # the single gene panel already exists
+                    if pf_link:
+                        panel_id = pf_link.panel_id
+                        output_panels.append(Panel.objects.get(id=panel_id))
+                    else:
+                        output_panels.append(Panel(
+                            name=f"{single_gene}_SG_panel", panelapp_id="",
+                            panel_type=single_gene
+                        ))
+                else:
+                    if int(panel) in signedoff_panels:
+                        signedoff_panel = signedoff_panels[int(panel)]
+                        # some panelapp panels are not accessible through the
+                        # API so check if they are present in the list of
+                        # signedoff panels
+                        pf_link = PanelFeatures.objects.get(
+                            panel__panelapp_id=int(panel),
+                            panel_version=signedoff_panel.version
+                        )
+
+                        if pf_link:
+                            output_panels.append(
+                                Panel.objects.get(id=pf_link.panel_id)
+                            )
+                        else:
+                            output_panels.append(
+                                Panel(
+                                    panelapp_id=panel, name=panel.name,
+                                    panel_type_id=panelapp_panel
+                                )
+                            )
+                    else:
+                        msg = (
+                            f"Panelapp panel id '{panel}' is not accessible "
+                            "through the API"
+                        )
+                        output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
+
+    return output_panels
