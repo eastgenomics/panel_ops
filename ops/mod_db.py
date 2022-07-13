@@ -506,18 +506,41 @@ def update_panelapp_panel(panelapp_id: int, version: str):
 
 
 def deploy_test_directory(td_data):
+    signedoff_panels = queries.get_all_signedoff_panels()
+
+    single_gene_panel_type = PanelType.objects.get(type="single_gene")
+    gms_panel_type = PanelType.objects.get(type="gms")
 
     output_to_loggers(
         "Starting test directory deployment...", "info", MOD_DB, CONSOLE
     )
 
-    signedoff_panels = queries.get_all_signedoff_panels()
-
     for indication in td_data["indications"]:
-        clinical_indication = gather_clinical_indication(
-            indication["code"], indication["name"], indication["gemini_name"]
+        ci = ClinicalIndication(
+            code=indication["code"], name=indication["name"],
+            gemini_name=indication["gemini_name"]
         )
-        panels = gather_panels(indication["panels"], signedoff_panels)
+
+        for panel in indication["panels"]:
+            panel_to_import = None
+
+            if panel:
+                if "HGNC:" in panel:
+                    panel_to_import = Panel(
+                        name=f"{panel}_SG_panel", panelapp_id="",
+                        panel_type_id=single_gene_panel_type.id
+                    )
+                else:
+                    if int(panel) in signedoff_panels:
+                        panel_to_import = Panel(
+                            name=signedoff_panels[int(panel)].version,
+                            panelapp_id=panel, panel_type_id=gms_panel_type
+                        )
+                
+                if panel_to_import:
+                    # check all genes are in the database
+                    pass
+
 
 
 ############ UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
@@ -635,75 +658,75 @@ def check_if_ci_data_in_database(data: dict):
     return False, ()
 
 
-def gather_clinical_indication(r_code, clinical_indication_name, gemini_name):
-    clinical_indication = ClinicalIndication.objects.get(
-        code=r_code, name=clinical_indication_name, gemini_name=gemini_name
+def gather_ci_and_panels_to_keep(ci_to_keep):
+    data = []
+
+    # gathering bespoke panels to keep
+    bespoke_cis = ClinicalIndication.objects.filter(code__iregex=r"^C")
+
+    # get panels associated
+    for bespoke_ci in bespoke_cis:
+        bespoke_panels = Panel.objects.filter(
+            clinicalindicationpanels__clinical_indication=bespoke_ci
+        )
+
+        data.append([bespoke_ci, bespoke_panels])
+
+    # gather ci provided and associated panels
+    for ci in ci_to_keep:
+        clinical_indication = ClinicalIndication.objects.get(
+            code=ci
+        )
+
+        panels = Panel.objects.filter(
+            clinicalindicationpanels__clinical_indication=clinical_indication
+        ).distinct()
+
+        data.append([clinical_indication, panels])
+
+    return data
+
+
+def clear_old_clinical_indications(ci_data):
+    # get ci ids
+    ci_ids = [ci.id for ci, panels in ci_data]
+    # get panel ids
+    panel_ids = [panel.id for ci, panels in ci_data for panel in panels]
+
+    # gather ci panels links
+    ci_panels_links = ClinicalIndicationPanels.objects.all().exclude(
+        clinical_indication_id__in=ci_ids
+    ).exclude(panel_id__in=panel_ids)
+
+    # gather panels_feature_links
+    panel_feature_links = PanelFeatures.objects.all().exclude(
+        panel_id__in=panel_ids
     )
 
-    if clinical_indication:
-        # clinical indication exists in current database
-        return clinical_indication
-    else:
-        # clinical indication needs creating
-        clinical_indication = ClinicalIndication(
-            code=r_code, name=clinical_indication_name, gemini_name=gemini_name
-        )
-        return clinical_indication
+    # gather ci
+    clinical_indication_to_delete = ClinicalIndication.objects.all().exclude(
+        id__in=ci_ids
+    )
 
+    # gather panels
+    panels_to_delete = Panel.objects.all().exclude(id__in=panel_ids)
 
-def gather_panels(panels, signedoff_panels):
-    output_panels = []
-    single_gene = PanelType.objects.get(type="single_gene")
-    panelapp_panel = PanelType.objects.get(type="gms")
+    output_to_loggers(
+        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+    )
+    ci_panels_links.delete()
 
-    if panels:
-        # check panel existence
-        for panel in panels:
-            # few None sprinkled here and there
-            if panel:
-                if regex.match(r"HGNC:[0-9]+", panel):
-                    # filter using the single gene and the SG panel
-                    pf_link = PanelFeatures.objects.get(
-                        feature__gene__hgnc_id=panel,
-                        panel__name__iregex=r".*_SG_panel$"
-                    )
+    output_to_loggers(
+        "Deleting panel features links...", "info", MOD_DB, CONSOLE
+    )
+    panel_feature_links.delete()
 
-                    # the single gene panel already exists
-                    if pf_link:
-                        panel_id = pf_link.panel_id
-                        output_panels.append(Panel.objects.get(id=panel_id))
-                    else:
-                        output_panels.append(Panel(
-                            name=f"{single_gene}_SG_panel", panelapp_id="",
-                            panel_type=single_gene
-                        ))
-                else:
-                    if int(panel) in signedoff_panels:
-                        signedoff_panel = signedoff_panels[int(panel)]
-                        # some panelapp panels are not accessible through the
-                        # API so check if they are present in the list of
-                        # signedoff panels
-                        pf_link = PanelFeatures.objects.get(
-                            panel__panelapp_id=int(panel),
-                            panel_version=signedoff_panel.version
-                        )
+    output_to_loggers(
+        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+    )
+    panels_to_delete.delete()
 
-                        if pf_link:
-                            output_panels.append(
-                                Panel.objects.get(id=pf_link.panel_id)
-                            )
-                        else:
-                            output_panels.append(
-                                Panel(
-                                    panelapp_id=panel, name=panel.name,
-                                    panel_type_id=panelapp_panel
-                                )
-                            )
-                    else:
-                        msg = (
-                            f"Panelapp panel id '{panel}' is not accessible "
-                            "through the API"
-                        )
-                        output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
-
-    return output_panels
+    output_to_loggers(
+        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+    )
+    clinical_indication_to_delete.delete()
