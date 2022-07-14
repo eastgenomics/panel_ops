@@ -553,7 +553,8 @@ def create_objects_for_td(td_data):
                         if int(panel) in signedoff_panels:
                             panel_to_import = Panel(
                                 name=signedoff_panels[int(panel)].name,
-                                panelapp_id=panel, panel_type_id=gms_panel_type
+                                panelapp_id=panel,
+                                panel_type_id=gms_panel_type.id
                             )
                             genes = signedoff_panels[int(panel)].get_genes(3)
                         else:
@@ -580,14 +581,13 @@ def create_objects_for_td(td_data):
                                 feature_type_id=feature_type.id,
                                 gene_id=gene_obj.id
                             )
+                            genes_to_create.append(gene_obj)
+                            features_to_create.append(feature_obj)
                         else:
                             gene_obj = Gene.objects.get(hgnc_id=gene)
                             feature_obj = Feature.objects.get(
                                 gene_id=gene_obj.id
                             )
-
-                        genes_to_create.append(gene_obj)
-                        features_to_create.append(feature_obj)
 
                         if panel_to_import.panelapp_id in signedoff_panels:
                             panel_version = signedoff_panels[
@@ -607,9 +607,15 @@ def create_objects_for_td(td_data):
 
                         pf_to_create.append(pf_link)
 
+                    td_date, td_type = td_data["source"].split("_")
+                    td_date_str = datetime.datetime.strptime(
+                        td_date, "%y%m%d"
+                    ).strftime("%Y-%m-%d")
+
                     cp_link = ClinicalIndicationPanels(
                         panel_id=panel_to_import.id,
-                        clinical_indication_id=ci.id
+                        clinical_indication_id=ci.id,
+                        ci_version=f"TD_{td_date_str}"
                     )
 
                     cp_to_create.append(cp_link)
