@@ -506,6 +506,9 @@ def update_panelapp_panel(panelapp_id: int, version: str):
 
 
 def create_objects_for_td(td_data):
+    output_to_loggers(
+        "Gathering all signedoff panels...", "info", MOD_DB, CONSOLE
+    )
     signedoff_panels = queries.get_all_signedoff_panels()
 
     single_gene_panel_type = PanelType.objects.get(type="single_gene")
@@ -628,7 +631,7 @@ def create_objects_for_td(td_data):
 
     return (
         clinical_indications_to_create, panels_to_create, genes_to_create,
-        features_to_create, pf_to_create, cp_to_create
+        features_to_create, cp_to_create, pf_to_create
     )
 
 
@@ -822,12 +825,12 @@ def clear_old_clinical_indications(ci_data):
     panel_feature_links.delete()
 
     output_to_loggers(
-        "Deleting panels links...", "info", MOD_DB, CONSOLE
+        "Deleting panels...", "info", MOD_DB, CONSOLE
     )
     panels_to_delete.delete()
 
     output_to_loggers(
-        "Deleting clinical indications ...", "info", MOD_DB, CONSOLE
+        "Deleting clinical indications...", "info", MOD_DB, CONSOLE
     )
     clinical_indication_to_delete.delete()
 
