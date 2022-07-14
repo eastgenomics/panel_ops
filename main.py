@@ -285,7 +285,14 @@ def main(**param):
                 )
                 ops.mod_db.clear_old_clinical_indications(ci_to_keep)
 
-                ops.mod_db.deploy_test_directory(td_data)
+                (
+                    clinical_indications, panels, genes, features, cp_links,
+                    pf_links
+                ) = ops.mod_db.create_objects_for_td(td_data)
+                ops.mod_db.import_td(
+                    clinical_indications, panels, genes, features, cp_links,
+                    pf_links
+                )
 
 
 if __name__ == "__main__":
