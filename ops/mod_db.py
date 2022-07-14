@@ -505,45 +505,139 @@ def update_panelapp_panel(panelapp_id: int, version: str):
     return db_panel_id
 
 
-def deploy_test_directory(td_data):
+def create_objects_for_td(td_data):
     signedoff_panels = queries.get_all_signedoff_panels()
 
     single_gene_panel_type = PanelType.objects.get(type="single_gene")
     gms_panel_type = PanelType.objects.get(type="gms")
+    feature_type = FeatureType.objects.get(type="gene")
 
     output_to_loggers(
         "Starting test directory deployment...", "info", MOD_DB, CONSOLE
     )
+
+    clinical_indications_to_create = []
+    panels_to_create = []
+    genes_to_create = []
+    features_to_create = []
+    pf_to_create = []
+    cp_to_create = []
 
     for indication in td_data["indications"]:
         ci = ClinicalIndication(
             code=indication["code"], name=indication["name"],
             gemini_name=indication["gemini_name"]
         )
+        clinical_indications_to_create.append(ci)
 
-        for panel in indication["panels"]:
-            panel_to_import = None
+        # some indications are None because test directory have Relevant Panel
+        if indication["panels"]:
+            for panel in indication["panels"]:
+                panel_to_import = None
+                genes = None
 
-            if panel:
-                if "HGNC:" in panel:
-                    panel_to_import = Panel(
-                        name=f"{panel}_SG_panel", panelapp_id="",
-                        panel_type_id=single_gene_panel_type.id
-                    )
-                else:
-                    if int(panel) in signedoff_panels:
+                # some panels are None because typos in gene symbols
+                if panel:
+                    # detect if panel is a single gene
+                    if "HGNC:" in panel:
                         panel_to_import = Panel(
-                            name=signedoff_panels[int(panel)].version,
-                            panelapp_id=panel, panel_type_id=gms_panel_type
+                            name=f"{panel}_SG_panel", panelapp_id="",
+                            panel_type_id=single_gene_panel_type.id
                         )
-                
-                if panel_to_import:
+                        genes = [panel]
+
+                    # panelapp panel id
+                    else:
+                        # check if the panel is in the signedoff panel dump
+                        # R59.3 points to an internal panel for example
+                        if int(panel) in signedoff_panels:
+                            panel_to_import = Panel(
+                                name=signedoff_panels[int(panel)].name,
+                                panelapp_id=panel, panel_type_id=gms_panel_type
+                            )
+                            genes = signedoff_panels[int(panel)].get_genes(3)
+                        else:
+                            msg = (
+                                f"{ci.code} points to an unaccessible "
+                                f"panelapp panel {panel}"
+                            )
+                            output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
+                            continue
+
+                    panels_to_create.append(panel_to_import)
+
                     # check all genes are in the database
-                    pass
+                    for gene in genes:
+                        # check if we have a gene from panelapp i.e. dict
+                        # with symbol, ENSEMBL...
+                        if not isinstance(gene, str):
+                            # get hgnc_id from the panelapp dict
+                            gene = gene["hgnc_id"]
+
+                        if not check_if_gene_in_database(gene):
+                            gene_obj = Gene(hgnc_id=gene)
+                            feature_obj = Feature(
+                                feature_type_id=feature_type.id,
+                                gene_id=gene_obj.id
+                            )
+                        else:
+                            gene_obj = Gene.objects.get(hgnc_id=gene)
+                            feature_obj = Feature.objects.get(
+                                gene_id=gene_obj.id
+                            )
+
+                        genes_to_create.append(gene_obj)
+                        features_to_create.append(feature_obj)
+
+                        if panel_to_import.panelapp_id in signedoff_panels:
+                            panel_version = signedoff_panels[
+                                panel_to_import.panelapp_id
+                            ].version
+                        else:
+                            panel_version = "1.0.0"
+
+                        pf_link = PanelFeatures(
+                            panel_id=panel_to_import.id,
+                            panel_version=panel_version,
+                            feature_id=feature_obj.id, description=(
+                                "Update test directory: "
+                                f"{td_data['source']}"
+                            )
+                        )
+
+                        pf_to_create.append(pf_link)
+
+                    cp_link = ClinicalIndicationPanels(
+                        panel_id=panel_to_import.id,
+                        clinical_indication_id=ci.id
+                    )
+
+                    cp_to_create.append(cp_link)
+
+                else:
+                    output_to_loggers(
+                        f"{indication['code']} was not imported", "warning",
+                        MOD_DB, CONSOLE
+                    )
+
+    return (
+        clinical_indications_to_create, panels_to_create, genes_to_create,
+        features_to_create, pf_to_create, cp_to_create
+    )
 
 
+def import_td(
+    clinical_indications, panels, genes, features, cp_links, pf_links
+):
+    ClinicalIndication.objects.bulk_create(clinical_indications)
+    Panel.objects.bulk_create(panels)
+    Gene.objects.bulk_create(genes)
+    Feature.objects.bulk_create(features)
+    ClinicalIndicationPanels.objects.bulk_create(cp_links)
+    PanelFeatures.objects.bulk_create(pf_links)
 
-############ UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
+
+########### UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
 
 
 def assign_CUH_code(clinical_indication: str):
@@ -722,11 +816,20 @@ def clear_old_clinical_indications(ci_data):
     panel_feature_links.delete()
 
     output_to_loggers(
-        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+        "Deleting panels links...", "info", MOD_DB, CONSOLE
     )
     panels_to_delete.delete()
 
     output_to_loggers(
-        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+        "Deleting clinical indications ...", "info", MOD_DB, CONSOLE
     )
     clinical_indication_to_delete.delete()
+
+
+def check_if_gene_in_database(gene):
+    try:
+        Gene.objects.get(hgnc_id=gene)
+    except Exception:
+        return False
+    else:
+        return True
