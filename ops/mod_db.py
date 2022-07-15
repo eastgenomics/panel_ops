@@ -519,25 +519,27 @@ def create_objects_for_td(td_data):
         "Starting test directory deployment...", "info", MOD_DB, CONSOLE
     )
 
-    clinical_indications_to_create = []
-    panels_to_create = []
-    genes_to_create = []
-    features_to_create = []
-    pf_to_create = []
-    cp_to_create = []
+    cp_info_to_import = []
+    pf_info_to_import = []
 
     for indication in td_data["indications"]:
         ci = ClinicalIndication(
             code=indication["code"], name=indication["name"],
             gemini_name=indication["gemini_name"]
         )
-        clinical_indications_to_create.append(ci)
+
+        panels_to_import = []
+        cp_to_import = []
 
         # some indications are None because test directory have Relevant Panel
         if indication["panels"]:
             for panel in indication["panels"]:
                 panel_to_import = None
                 genes = None
+
+                genes_to_import = []
+                features_to_import = []
+                pf_to_import = []
 
                 # some panels are None because typos in gene symbols
                 if panel:
@@ -568,7 +570,7 @@ def create_objects_for_td(td_data):
                             output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
                             continue
 
-                    panels_to_create.append(panel_to_import)
+                    panels_to_import.append(panel_to_import)
 
                     # check all genes are in the database
                     for gene in genes:
@@ -581,34 +583,42 @@ def create_objects_for_td(td_data):
                         if not check_if_gene_in_database(gene):
                             gene_obj = Gene(hgnc_id=gene)
                             feature_obj = Feature(
-                                feature_type_id=feature_type.id,
-                                gene_id=gene_obj.id
+                                feature_type_id=feature_type.id
                             )
-                            genes_to_create.append(gene_obj)
-                            features_to_create.append(feature_obj)
                         else:
                             gene_obj = Gene.objects.get(hgnc_id=gene)
                             feature_obj = Feature.objects.get(
                                 gene_id=gene_obj.id
                             )
 
-                        if panel_to_import.panelapp_id in signedoff_panels:
+                        genes_to_import.append(gene_obj)
+                        features_to_import.append(feature_obj)
+
+                        if (
+                            panel_to_import.panelapp_id and
+                            int(panel_to_import.panelapp_id) in signedoff_panels
+                        ):
                             panel_version = signedoff_panels[
-                                panel_to_import.panelapp_id
+                                int(panel_to_import.panelapp_id)
                             ].version
                         else:
                             panel_version = "1.0.0"
 
                         pf_link = PanelFeatures(
-                            panel_id=panel_to_import.id,
-                            panel_version=panel_version,
-                            feature_id=feature_obj.id, description=(
+                            panel_version=panel_version, description=(
                                 "Update test directory: "
                                 f"{td_data['source']}"
                             )
                         )
 
-                        pf_to_create.append(pf_link)
+                        pf_to_import.append(pf_link)
+
+                    pf_info_to_import.append(
+                        [
+                            panel_to_import, pf_to_import, features_to_import,
+                            genes_to_import
+                        ]
+                    )
 
                     td_date, td_type = td_data["source"].split("_")
                     td_date_str = datetime.datetime.strptime(
@@ -616,12 +626,10 @@ def create_objects_for_td(td_data):
                     ).strftime("%Y-%m-%d")
 
                     cp_link = ClinicalIndicationPanels(
-                        panel_id=panel_to_import.id,
-                        clinical_indication_id=ci.id,
                         ci_version=f"TD_{td_date_str}"
                     )
 
-                    cp_to_create.append(cp_link)
+                    cp_to_import.append(cp_link)
 
                 else:
                     output_to_loggers(
@@ -629,21 +637,31 @@ def create_objects_for_td(td_data):
                         MOD_DB, CONSOLE
                     )
 
-    return (
-        clinical_indications_to_create, panels_to_create, genes_to_create,
-        features_to_create, cp_to_create, pf_to_create
-    )
+        cp_info_to_import.append([ci, cp_to_import, panels_to_import])
+
+    return cp_info_to_import, pf_info_to_import
 
 
-def import_td(
-    clinical_indications, panels, genes, features, cp_links, pf_links
-):
-    ClinicalIndication.objects.bulk_create(clinical_indications)
-    Panel.objects.bulk_create(panels)
-    Gene.objects.bulk_create(genes)
-    Feature.objects.bulk_create(features)
-    ClinicalIndicationPanels.objects.bulk_create(cp_links)
-    PanelFeatures.objects.bulk_create(pf_links)
+def import_td(cp_info_to_import, pf_info_to_import):
+    for ci, ci_panel_links, panels in cp_info_to_import:
+        ci.save()
+
+        for panel, ci_panel_link in zip(panels, ci_panel_links):
+            panel.save()
+            ci_panel_link.clinical_indication_id = ci.id
+            ci_panel_link.panel_id = panel.id
+            ci_panel_link.save()
+
+    for panel, panel_feature_links, features, genes in pf_info_to_import:
+        for panel_feature_link, feature, gene in zip(
+            panel_feature_links, features, genes
+        ):
+            gene.save()
+            feature.gene_id = gene.id
+            feature.save()
+            panel_feature_link.panel_id = panel.id
+            panel_feature_link.feature_id = feature.id
+            panel_feature_link.save()
 
 
 ########### UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
@@ -790,7 +808,7 @@ def gather_ci_and_panels_to_keep(ci_to_keep):
     return data
 
 
-def clear_old_clinical_indications(ci_data):
+def clear_old_clinical_indications_panels(ci_data):
     # get ci ids
     ci_ids = [ci.id for ci, panels in ci_data]
     # get panel ids
