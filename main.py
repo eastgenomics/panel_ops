@@ -283,16 +283,10 @@ def main(**param):
                 ci_to_keep = ops.mod_db.gather_ci_and_panels_to_keep(
                     param["ci_to_keep"]
                 )
-                ops.mod_db.clear_old_clinical_indications(ci_to_keep)
+                ops.mod_db.clear_old_clinical_indications_panels(ci_to_keep)
 
-                (
-                    clinical_indications, panels, genes, features, cp_links,
-                    pf_links
-                ) = ops.mod_db.create_objects_for_td(td_data)
-                ops.mod_db.import_td(
-                    clinical_indications, panels, genes, features, cp_links,
-                    pf_links
-                )
+                cp_data, pf_data = ops.mod_db.create_objects_for_td(td_data)
+                ops.mod_db.import_td(cp_data, pf_data)
 
 
 if __name__ == "__main__":
