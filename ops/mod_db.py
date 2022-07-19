@@ -576,7 +576,10 @@ def create_objects_for_td(td_data):
                                 panelapp_id=panel,
                                 panel_type_id=gms_panel_type.id
                             )
-                            genes = signedoff_panels[int(panel)].get_genes(3)
+                            genes = set([
+                                gene["hgnc_id"]
+                                for gene in signedoff_panels[int(panel)].get_genes(3)
+                            ])
                         else:
                             msg = (
                                 f"{ci.code} points to an unaccessible "
@@ -589,12 +592,6 @@ def create_objects_for_td(td_data):
 
                     # check all genes are in the database
                     for gene in genes:
-                        # check if we have a gene from panelapp i.e. dict
-                        # with symbol, ENSEMBL...
-                        if not isinstance(gene, str):
-                            # get hgnc_id from the panelapp dict
-                            gene = gene["hgnc_id"]
-
                         if not check_if_gene_in_database(gene):
                             gene_obj = Gene(hgnc_id=gene)
                             feature_obj = Feature(
@@ -657,8 +654,11 @@ def create_objects_for_td(td_data):
 
                 else:
                     output_to_loggers(
-                        f"{indication['code']} was not imported", "warning",
-                        MOD_DB, CONSOLE
+                        (
+                            f"'{panel}' from '{indication['code']}' will not "
+                            "be imported"
+                        ),
+                        "warning", MOD_DB, CONSOLE
                     )
 
         # add clinical indication and its links to the list of things to import
