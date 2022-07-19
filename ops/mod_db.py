@@ -603,6 +603,8 @@ def create_objects_for_td(td_data):
                                 gene_id=gene_obj.id
                             )
 
+                        # add the gene/feature objects to the list of genes and
+                        # features associated with the panel
                         genes_to_import.append(gene_obj)
                         features_to_import.append(feature_obj)
 
@@ -615,6 +617,7 @@ def create_objects_for_td(td_data):
                                 int(panel_to_import.panelapp_id)
                             ].version
                         else:
+                            # assign default version to the single gene panels
                             panel_version = "1.0.0"
 
                         # create the panelfeature object
