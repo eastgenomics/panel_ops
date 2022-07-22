@@ -1,5 +1,6 @@
 from collections import defaultdict, OrderedDict
 import datetime
+import json
 import os
 import re
 from pathlib import Path
@@ -1436,7 +1437,7 @@ def parse_panelapp_update_file(panelapp_file: str):
 
     Returns:
         list: List of dict for panelapp info for panels to update
-    """ 
+    """
 
     data = []
 
@@ -1446,3 +1447,17 @@ def parse_panelapp_update_file(panelapp_file: str):
             data.append({"panelapp_id": panelapp_id, "version": version})
 
     return data
+
+
+def parse_json_file(json_file: str):
+    """ Parse json file and return dict type object
+
+    Args:
+        json_file (str): Path to the json file
+
+    Returns:
+        dict: Dict containing the data in the json
+    """
+
+    with open(json_file) as f:
+        return json.load(f)

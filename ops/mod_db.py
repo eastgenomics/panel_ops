@@ -3,7 +3,9 @@ import os
 import sys
 
 import django
-from panelapp import Panelapp
+from panelapp import Panelapp, queries
+from packaging import version
+import regex
 
 from .config import path_to_panel_palace
 from .logger import setup_logging, output_to_loggers
@@ -500,6 +502,211 @@ def update_panelapp_panel(panelapp_id: int, version: str):
                 "info", CONSOLE, MOD_DB
             )
 
+    return db_panel_id
+
+
+def create_objects_for_td(td_data):
+    """ Create objects for the test directory
+
+    Args:
+        td_data (dict): Dict containing the info parsed from the test directory
+
+    Returns:
+        list: List of 2 lists of clinical indications objects and related 
+        items to import, and the panels and related items to import
+    """
+
+    output_to_loggers(
+        "Gathering all signedoff panels...", "info", MOD_DB, CONSOLE
+    )
+    signedoff_panels = queries.get_all_signedoff_panels()
+
+    # get the objects for a few required fields in the panel and the feature
+    # tables
+    single_gene_panel_type = PanelType.objects.get(type="single_gene")
+    gms_panel_type = PanelType.objects.get(type="gms")
+    feature_type = FeatureType.objects.get(type="gene")
+
+    output_to_loggers(
+        "Gathering objects for test directory deployment...", "info",
+        MOD_DB, CONSOLE
+    )
+
+    cp_info_to_import = []
+    pf_info_to_import = []
+
+    # go through all the indications
+    for indication in td_data["indications"]:
+        ci = ClinicalIndication(
+            code=indication["code"], name=indication["name"],
+            gemini_name=indication["gemini_name"]
+        )
+
+        panels_to_import = []
+        cp_to_import = []
+
+        # some indications are None because test directory have Relevant Panel
+        # so check if we have panels for the clinical indication
+        if indication["panels"]:
+            for panel in indication["panels"]:
+                panel_to_import = None
+                genes = None
+
+                genes_to_import = []
+                features_to_import = []
+                pf_to_import = []
+
+                # some panels are None because typos in gene symbols
+                if panel:
+                    # detect if panel is a single gene
+                    if "HGNC:" in panel:
+                        panel_to_import = Panel(
+                            name=f"{panel}_SG_panel", panelapp_id="",
+                            panel_type_id=single_gene_panel_type.id
+                        )
+                        genes = [panel]
+
+                    # panelapp panel id
+                    else:
+                        # check if the panel is in the signedoff panel dump
+                        # R59.3 points to an internal panel for example
+                        if int(panel) in signedoff_panels:
+                            panel_to_import = Panel(
+                                name=signedoff_panels[int(panel)].name,
+                                panelapp_id=panel,
+                                panel_type_id=gms_panel_type.id
+                            )
+                            genes = set([
+                                gene["hgnc_id"]
+                                for gene in signedoff_panels[int(panel)].get_genes(3)
+                            ])
+                        else:
+                            msg = (
+                                f"{ci.code} points to an unaccessible "
+                                f"panelapp panel {panel}"
+                            )
+                            output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
+                            continue
+
+                    panels_to_import.append(panel_to_import)
+
+                    # check all genes are in the database
+                    for gene in genes:
+                        if not check_if_gene_in_database(gene):
+                            gene_obj = Gene(hgnc_id=gene)
+                            feature_obj = Feature(
+                                feature_type_id=feature_type.id
+                            )
+                        else:
+                            gene_obj = Gene.objects.get(hgnc_id=gene)
+                            feature_obj = Feature.objects.get(
+                                gene_id=gene_obj.id
+                            )
+
+                        # add the gene/feature objects to the list of genes and
+                        # features associated with the panel
+                        genes_to_import.append(gene_obj)
+                        features_to_import.append(feature_obj)
+
+                        # get the version of the panel
+                        if (
+                            panel_to_import.panelapp_id and
+                            int(panel_to_import.panelapp_id) in signedoff_panels
+                        ):
+                            panel_version = signedoff_panels[
+                                int(panel_to_import.panelapp_id)
+                            ].version
+                        else:
+                            # assign default version to the single gene panels
+                            panel_version = "1.0.0"
+
+                        # create the panelfeature object
+                        pf_link = PanelFeatures(
+                            panel_version=panel_version, description=(
+                                "Update test directory: "
+                                f"{td_data['source']}"
+                            )
+                        )
+
+                        # gather links for every feature of the panel
+                        pf_to_import.append(pf_link)
+
+                    # add panels, links and features in the list of things that
+                    # will need to be imported
+                    pf_info_to_import.append(
+                        [
+                            panel_to_import, pf_to_import, features_to_import,
+                            genes_to_import
+                        ]
+                    )
+
+                    # extract date of the source for the clinical indication
+                    # versions
+                    td_date, td_type = td_data["source"].split("_")
+                    td_date_str = datetime.datetime.strptime(
+                        td_date, "%y%m%d"
+                    ).strftime("%Y-%m-%d")
+
+                    # create link between clinical indication and panel
+                    cp_link = ClinicalIndicationPanels(
+                        ci_version=f"TD_{td_date_str}"
+                    )
+
+                    # gather all links for that clinical indication
+                    cp_to_import.append(cp_link)
+
+                else:
+                    output_to_loggers(
+                        (
+                            f"'{panel}' from '{indication['code']}' will not "
+                            "be imported"
+                        ),
+                        "warning", MOD_DB, CONSOLE
+                    )
+
+        # add clinical indication and its links to the list of things to import
+        cp_info_to_import.append([ci, cp_to_import, panels_to_import])
+
+    return cp_info_to_import, pf_info_to_import
+
+
+def import_td(cp_info_to_import, pf_info_to_import):
+    """ Import the clinical indications, panels, features, genes and the links
+
+    Args:
+        cp_info_to_import (list): List of clinical indications with panels and
+        the links
+        pf_info_to_import (list): List of panels with features and links
+    """
+
+    for ci, ci_panel_links, panels in cp_info_to_import:
+        ci.save()
+
+        for panel, ci_panel_link in zip(panels, ci_panel_links):
+            panel.save()
+            # populate the link with the ids of the clinical indication and the
+            # panel
+            ci_panel_link.clinical_indication_id = ci.id
+            ci_panel_link.panel_id = panel.id
+            ci_panel_link.save()
+
+    for panel, panel_feature_links, features, genes in pf_info_to_import:
+        # loop through links, features and genes in parallel
+        for panel_feature_link, feature, gene in zip(
+            panel_feature_links, features, genes
+        ):
+            gene.save()
+            # get gene id from recently created gene for feature foreign key
+            feature.gene_id = gene.id
+            feature.save()
+            # assign ids in panel feature link
+            panel_feature_link.panel_id = panel.id
+            panel_feature_link.feature_id = feature.id
+            panel_feature_link.save()
+
+
+########### UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############
+
 
 def assign_CUH_code(clinical_indication: str):
     """ Assign new CUH code to clinical indication
@@ -611,3 +818,86 @@ def check_if_ci_data_in_database(data: dict):
                     )
 
     return False, ()
+
+
+def gather_ci_and_panels_to_keep(ci_to_keep):
+    data = []
+
+    # gathering bespoke panels to keep
+    bespoke_cis = ClinicalIndication.objects.filter(code__iregex=r"^C")
+
+    # get panels associated
+    for bespoke_ci in bespoke_cis:
+        bespoke_panels = Panel.objects.filter(
+            clinicalindicationpanels__clinical_indication=bespoke_ci
+        )
+
+        data.append([bespoke_ci, bespoke_panels])
+
+    # gather ci provided and associated panels
+    for ci in ci_to_keep:
+        clinical_indication = ClinicalIndication.objects.get(
+            code=ci
+        )
+
+        panels = Panel.objects.filter(
+            clinicalindicationpanels__clinical_indication=clinical_indication
+        ).distinct()
+
+        data.append([clinical_indication, panels])
+
+    return data
+
+
+def clear_old_clinical_indications_panels(ci_data):
+    # get ci ids
+    ci_ids = [ci.id for ci, panels in ci_data]
+    # get panel ids
+    panel_ids = [panel.id for ci, panels in ci_data for panel in panels]
+
+    # gather ci panels links
+    ci_panels_links = ClinicalIndicationPanels.objects.all().exclude(
+        clinical_indication_id__in=ci_ids
+    ).exclude(panel_id__in=panel_ids)
+
+    # gather panels_feature_links
+    panel_feature_links = PanelFeatures.objects.all().exclude(
+        panel_id__in=panel_ids
+    )
+
+    # gather ci
+    clinical_indication_to_delete = ClinicalIndication.objects.all().exclude(
+        id__in=ci_ids
+    )
+
+    # gather panels
+    panels_to_delete = Panel.objects.all().exclude(id__in=panel_ids)
+
+    output_to_loggers(
+        "Deleting clinical indication panels links...", "info", MOD_DB, CONSOLE
+    )
+    ci_panels_links.delete()
+
+    output_to_loggers(
+        "Deleting panel features links...", "info", MOD_DB, CONSOLE
+    )
+    panel_feature_links.delete()
+
+    output_to_loggers(
+        "Deleting panels...", "info", MOD_DB, CONSOLE
+    )
+    panels_to_delete.delete()
+
+    output_to_loggers(
+        "Deleting clinical indications...", "info", MOD_DB, CONSOLE
+    )
+    clinical_indication_to_delete.delete()
+
+
+def check_if_gene_in_database(gene):
+    try:
+        Gene.objects.get(hgnc_id=gene)
+    except Exception:
+        return False
+    else:
+        return True

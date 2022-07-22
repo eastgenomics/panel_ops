@@ -95,6 +95,17 @@ def parse_args():
             "the required version in the second"
         )
     )
+    mod_db.add_argument(
+        "-deploy_td", "--deploy_test_directory", help=(
+            "Output file from test_directory_parser"
+        )
+    )
+    mod_db.add_argument(
+        "-ci_to_keep", "--ci_to_keep", nargs="+", help=(
+            "Clinical indications r-codes to keep in conjonction of "
+            "deployment of test directory"
+        )
+    )
 
     args = vars(parser.parse_args())
 
@@ -263,6 +274,19 @@ def main(**param):
                     ops.mod_db.update_panelapp_panel(
                         panel["panelapp_id"], panel["version"]
                     )
+
+            if param["deploy_test_directory"] and param["ci_to_keep"]:
+                td_data = ops.utils.parse_json_file(
+                    param["deploy_test_directory"]
+                )
+
+                ci_to_keep = ops.mod_db.gather_ci_and_panels_to_keep(
+                    param["ci_to_keep"]
+                )
+                ops.mod_db.clear_old_clinical_indications_panels(ci_to_keep)
+
+                cp_data, pf_data = ops.mod_db.create_objects_for_td(td_data)
+                ops.mod_db.import_td(cp_data, pf_data)
 
 
 if __name__ == "__main__":
