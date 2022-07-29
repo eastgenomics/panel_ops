@@ -285,7 +285,9 @@ def main(**param):
                 )
                 ops.mod_db.clear_old_clinical_indications_panels(ci_to_keep)
 
-                cp_data, pf_data = ops.mod_db.create_objects_for_td(td_data)
+                cp_data, pf_data = ops.mod_db.create_objects_for_td(
+                    td_data, ci_to_keep
+                )
                 ops.mod_db.import_td(cp_data, pf_data)
 
 
