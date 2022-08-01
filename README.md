@@ -58,7 +58,7 @@ python main.py mod_db --hgnc ${hgnc_dump_file} ${admin_user} ${admin_passwd} -g2
 # import bespoke panels
 python main.py mod_db --hgnc ${hgnc_dump_file} ${admin_user} ${admin_passwd} -new_panel ${xls_file}
 # import new test directory
-python panel_ops/main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} --deploy_test_directory ${output_test_directory_parser} [ --ci_to_keep R-code R-code ... ]
+python panel_ops/main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} --deploy_test_directory ${output_test_directory_parser} --ci_to_keep R-code R-code ... 
 ```
 
 ## What does this output?
