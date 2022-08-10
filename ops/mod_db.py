@@ -505,11 +505,12 @@ def update_panelapp_panel(panelapp_id: int, version: str):
     return db_panel_id
 
 
-def create_objects_for_td(td_data):
+def create_objects_for_td(td_data, ci_to_keep):
     """ Create objects for the test directory
 
     Args:
         td_data (dict): Dict containing the info parsed from the test directory
+        ci_to_keep (list): List of test codes to not import in the database
 
     Returns:
         list: List of 2 lists of clinical indications objects and related 
@@ -519,6 +520,7 @@ def create_objects_for_td(td_data):
     output_to_loggers(
         "Gathering all signedoff panels...", "info", MOD_DB, CONSOLE
     )
+
     signedoff_panels = queries.get_all_signedoff_panels()
 
     # get the objects for a few required fields in the panel and the feature
@@ -535,8 +537,17 @@ def create_objects_for_td(td_data):
     cp_info_to_import = []
     pf_info_to_import = []
 
+    codes_of_cis_to_be_kept = [ci.code for ci, panel in ci_to_keep]
+
     # go through all the indications
     for indication in td_data["indications"]:
+        # do not import the clinical indications that we want to keep
+        if indication["code"] in codes_of_cis_to_be_kept:
+            output_to_loggers(
+                f"Skipping {indication['code']}", "info", CONSOLE, MOD_DB
+            )
+            continue
+
         ci = ClinicalIndication(
             code=indication["code"], name=indication["name"],
             gemini_name=indication["gemini_name"]
@@ -667,6 +678,11 @@ def create_objects_for_td(td_data):
         # add clinical indication and its links to the list of things to import
         cp_info_to_import.append([ci, cp_to_import, panels_to_import])
 
+    output_to_loggers(
+        f"Gathering of objects to import finished...",
+        "info", MOD_DB, CONSOLE
+    )
+
     return cp_info_to_import, pf_info_to_import
 
 
@@ -678,6 +694,11 @@ def import_td(cp_info_to_import, pf_info_to_import):
         the links
         pf_info_to_import (list): List of panels with features and links
     """
+
+    output_to_loggers(
+        f"Importing objects to the database...",
+        "info", MOD_DB, CONSOLE
+    )
 
     for ci, ci_panel_links, panels in cp_info_to_import:
         ci.save()
@@ -703,6 +724,11 @@ def import_td(cp_info_to_import, pf_info_to_import):
             panel_feature_link.panel_id = panel.id
             panel_feature_link.feature_id = feature.id
             panel_feature_link.save()
+
+    output_to_loggers(
+        f"Import finished!",
+        "info", MOD_DB, CONSOLE
+    )
 
 
 ########### UTILS FUNCTIONS FOR MODIFYING THE DATABASE ##############

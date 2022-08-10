@@ -50,13 +50,15 @@ python main.py generate -m manifest.csv
 python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
 # import the data in the database
-python main.py mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
+python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
 # import hgnc data
-python main.py mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
+python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
 # import g2t data
-python main.py mod_db ${admin_user} ${admin_passwd} -g2t ${g2t_file}
+python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -g2t ${g2t_file}
 # import bespoke panels
-python main.py mod_db ${admin_user} ${admin_passwd} -new_panel ${xls_file}
+python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -new_panel ${xls_file}
+# import new test directory
+python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} --deploy_test_directory ${output_test_directory_parser} --ci_to_keep R-code R-code ... 
 ```
 
 ## What does this output?
