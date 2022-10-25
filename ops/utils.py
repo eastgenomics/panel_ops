@@ -562,11 +562,13 @@ def parse_gemini_dump(gemini_dump: str):
                     for column, header in enumerate(line)
                 }
             else:
-                sample2panels.setdefault(
-                    line[headers["ExomeNumber"]], []
-                ).append(
-                    line[headers["PanelDescription"]]
-                )
+                # skip cancelled samples
+                if line[headers["StatusDescription"]].strip() != "Cancelled Failed":
+                    sample2panels.setdefault(
+                        line[headers["ExomeNumber"]], []
+                    ).append(
+                        line[headers["PanelDescription"]]
+                    )
 
     return OrderedDict(sorted(sample2panels.items(), key=lambda t: t[0]))
 
