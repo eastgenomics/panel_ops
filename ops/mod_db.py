@@ -231,6 +231,10 @@ def import_panel_form_data(panel_form: str):
 
     # bool to indicate if single gene panels are involved
     single_gene_panel = False
+    # get the panel type matching the single gene type
+    sg_panel_type_id = PanelType.objects.get(type="single_gene").id
+    # get the panel type matching the in-house type
+    in_house_panel_type_id = PanelType.objects.get(type="in-house").id
 
     for ci in data:
         ci_data = data[ci]
@@ -249,9 +253,6 @@ def import_panel_form_data(panel_form: str):
         for panel in ci_data["panels"]:
             panel_data = ci_data["panels"][panel]
 
-            # get the panel type matching the in-house type
-            in_house_panel_type_id = PanelType.objects.get(type="in-house").id
-
             if add_on:
                 # get the existing panels associated to the existing clinical
                 # indication
@@ -262,13 +263,20 @@ def import_panel_form_data(panel_form: str):
                 if len(existing_panel_ids) == 1:
                     existing_panel_id = list(existing_panel_ids)[0]
 
-                    # get the latest version of a panel to increment it when
-                    # creating panel feature links
-                    panel_versions = PanelFeatures.objects.filter(
-                        panel_id=existing_panel_id
-                    ).values_list("panel_version", flat=True)
+                    panel_type_id = Panel.objects.get(
+                        id=existing_panel_id
+                    ).panel_type_id
 
-                    latest_version = get_latest_panel_version(panel_versions)
+                    if panel_type_id == sg_panel_type_id:
+                        single_gene_panel = True
+                    else:
+                        # get the latest version of a panel to increment it when
+                        # creating panel feature links
+                        panel_versions = PanelFeatures.objects.filter(
+                            panel_id=existing_panel_id
+                        ).values_list("panel_version", flat=True)
+
+                        latest_version = get_latest_panel_version(panel_versions)
                 else:
                     # go through the ids to see if only single gene panels are
                     # associated
@@ -292,9 +300,7 @@ def import_panel_form_data(panel_form: str):
                             ))
 
                     single_gene_panel = True
-                    sg_panel_type_id = PanelType.objects.get(
-                        type="single_gene"
-                    ).id
+
             else:
                 # create panel
                 new_panel, panel_created = Panel.objects.get_or_create(
