@@ -710,12 +710,21 @@ def import_td(cp_info_to_import, pf_info_to_import):
         ci.save()
 
         for panel, ci_panel_link in zip(panels, ci_panel_links):
-            panel.save()
-            # populate the link with the ids of the clinical indication and the
-            # panel
-            ci_panel_link.clinical_indication_id = ci.id
-            ci_panel_link.panel_id = panel.id
-            ci_panel_link.save()
+            # in order to check that the panel has not been updated already,
+            # query the database for a panel with the same name
+            in_database_panel = Panel.objects.filter(name=panel.name)
+
+            if in_database_panel:
+                ci_panel_link.clinical_indication_id = ci.id
+                ci_panel_link.panel_id = in_database_panel.get().id
+                ci_panel_link.save()
+            else:
+                panel.save()
+                # populate the link with the ids of the clinical indication and
+                # the panel
+                ci_panel_link.clinical_indication_id = ci.id
+                ci_panel_link.panel_id = panel.id
+                ci_panel_link.save()
 
     for panel, panel_feature_links, features, genes in pf_info_to_import:
         # loop through links, features and genes in parallel
@@ -726,6 +735,7 @@ def import_td(cp_info_to_import, pf_info_to_import):
             # get gene id from recently created gene for feature foreign key
             feature.gene_id = gene.id
             feature.save()
+            panel = Panel.objects.filter(name=panel.name).get()
             # assign ids in panel feature link
             panel_feature_link.panel_id = panel.id
             panel_feature_link.feature_id = feature.id
