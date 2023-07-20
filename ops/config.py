@@ -1,8 +1,8 @@
 # Path to panel logs folder
-path_to_logs = "/home/egg-user/panels/panel_logs"
+path_to_logs = "/Users/jason/Github/panel_ops"
 
 # Path to the panel_palace folder
-path_to_panel_palace = "/home/egg-user/panels/panel_palace/"
+path_to_panel_palace = "/Users/jason/Github/panel_ops/panel_palace"
 
 # Path to the panel_config folder
-path_to_panel_config = "/home/egg-user/panels/panel_config"
+path_to_panel_config = "/Users/jason/Github/panel_ops/panel_config"

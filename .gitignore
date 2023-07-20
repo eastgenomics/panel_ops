@@ -1,0 +1,9 @@
+config_panel_db.py
+env
+all_panelapp_dump
+GMS_panelapp_dump
+__pycache__
+.vscode
+*.log
+hgnc_dump_*
+sql_dump

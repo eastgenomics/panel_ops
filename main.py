@@ -5,7 +5,7 @@ import ops
 
 sys.path.append(ops.config.path_to_panel_config)
 
-import config_panel_db
+import panel_config.config_panel_db as config_panel_db
 
 
 def parse_args():
@@ -129,6 +129,8 @@ def main(**param):
     if param["hgnc"] and not isinstance(param["hgnc"], list):
         # parse hgnc file
         hgnc_data = ops.utils.parse_hgnc_dump(param["hgnc"])
+    else:
+        hgnc_data = None
 
     # Check which subparser is being used
     if param["command"] == "check":
@@ -293,6 +295,10 @@ def main(**param):
                     td_data, ci_to_keep
                 )
                 ops.mod_db.import_td(cp_data, pf_data)
+        else:
+            # NOTE: give better instruction to user when password is incorrect
+            # rather than no error message
+            print('SQL password incorrect')
 
 
 if __name__ == "__main__":

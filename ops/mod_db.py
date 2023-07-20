@@ -21,6 +21,7 @@ django.setup()
 from django.core import management
 from django.core.management.commands import loaddata
 from django.apps import apps
+
 from panel_database.models import (
     Genes2transcripts, Gene, Transcript, Feature, ClinicalIndication,
     ClinicalIndicationPanels, Panel, PanelFeatures, PanelType, FeatureType
