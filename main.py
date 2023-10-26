@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from ops import generate, mod_db, utils
+from ops import generate, mod_db, utils, config
 
 sys.path.append(config.path_to_panel_config)
 

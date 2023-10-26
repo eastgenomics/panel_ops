@@ -7,9 +7,9 @@ from panelapp import Panelapp, queries
 from packaging import version
 import regex
 
-from config import path_to_panel_palace
-from logger import setup_logging, output_to_loggers
-from utils import (
+from ops.config import path_to_panel_palace
+from ops.logger import setup_logging, output_to_loggers
+from ops.utils import (
     get_date, parse_hgnc_dump, parse_g2t, parse_panel_form,
     get_latest_panel_version
 )
