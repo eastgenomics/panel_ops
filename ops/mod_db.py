@@ -108,12 +108,14 @@ def import_hgnc_dump(path_to_hgnc_dump: str, date: str):
     output_to_loggers(msg, "info", CONSOLE, MOD_DB)
 
 
-def import_new_g2t(path_to_g2t_file: str):
+def import_new_g2t(path_to_g2t_file: str, reference_id: int):
     """ Import new genes2transcripts file to update tables in the database
     It changes the clinical status and the date attribute of the g2t table
 
     Args:
         path_to_g2t_file (str): Path to the genes2transcripts file to import
+        reference_id (int): Reference id for which that deployment of genes and
+        transcripts is for
     """
 
     msg = f"Importing new g2t using: '{path_to_g2t_file}'"
@@ -147,7 +149,8 @@ def import_new_g2t(path_to_g2t_file: str):
                 "gene__hgnc_id": gene,
                 "transcript__refseq_base": refseq,
                 "transcript__version": version,
-                "transcript__canonical": canonical
+                "transcript__canonical": canonical,
+                "reference_id": reference_id
             }
 
             row = g2t_rows.filter(**filter_dict)
@@ -171,7 +174,7 @@ def import_new_g2t(path_to_g2t_file: str):
                     refseq_base=refseq, version=version, canonical=canonical
                 )
                 new_g2t, g2t_created = Genes2transcripts.objects.get_or_create(
-                    gene_id=new_gene.id, reference_id=1, date=date,
+                    gene_id=new_gene.id, reference_id=reference_id, date=date,
                     transcript_id=new_tx.id, clinical_transcript=clinical
                 )
 
