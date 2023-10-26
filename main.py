@@ -19,6 +19,11 @@ def parse_args():
         description="Prepare and import data for Panelapp database"
     )
 
+    parser.add_argument(
+        "-ref", "--reference", choices=["GRCh37", "GRCh38"],
+        help="Which reference build to use for importing or exporting g2t data"
+    )
+
     parser.add_argument("-t", "--test_xls", help="NHS test directory")
     parser.add_argument("-hgnc", "--hgnc", help="HGNC dump file")
 
@@ -51,6 +56,10 @@ def parse_args():
         help="Generate genepanels"
     )
     generate.add_argument("-m", "--manifest", help="Gemini database csv dump")
+    generate.add_argument(
+        "-g2t", "--genes2transcripts",
+        help="Generate the genes2transcripts file"
+    )
 
     check = subparser.add_parser("check")
     check.add_argument(
@@ -117,6 +126,13 @@ def main(**param):
     passwd = config_panel_db.passwd_ro
     host = config_panel_db.host
 
+    session, meta = ops.utils.connect_to_db(
+        user, passwd, host, "panel_database"
+    )
+
+    if param["reference"]:
+        reference_id = ops.utils.get_reference_id(param["reference"])
+
     if param["test_xls"]:
         # gather data from the test directory
         clinind_data = ops.utils.parse_test_directory(param["test_xls"])
@@ -141,10 +157,6 @@ def main(**param):
                 ele.split("=")[0]: ele.split("=")[1]
                 for ele in param["files"]
             }
-
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
 
             # gather data from panels
             (
@@ -215,9 +227,6 @@ def main(**param):
             assert hgnc_data is not None, (
                 "-hgnc option is needed for genepanels cmd"
             )
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
             ops.generate.generate_genepanels(session, meta, hgnc_data)
 
         # Generate a bioinformatic manifest type file for reports
@@ -225,12 +234,15 @@ def main(**param):
             assert hgnc_data is not None, (
                 "-hgnc option is needed for manifest cmd"
             )
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
-            sample2panels = ops.generate.generate_manifest(
+            ops.generate.generate_manifest(
                 session, meta, param["manifest"], hgnc_data
             )
+
+        if param["genes2transcripts"]:
+            assert param["reference"] is not None, (
+                "-g2t option is needed for creating a g2t file"
+            )
+            ops.generate.generate_g2t(session, meta, reference_id)
 
     elif param["command"] == "mod_db":
         # check if the credentials for panel admin are correct
@@ -251,7 +263,10 @@ def main(**param):
                 ops.mod_db.import_hgnc_dump(args["hgnc"], args["date"])
 
             if param["g2t"]:
-                ops.mod_db.import_new_g2t(param["g2t"])
+                assert param["reference"] is not None, (
+                    "-g2t option is needed for creating a g2t file"
+                )
+                ops.mod_db.import_new_g2t(param["g2t"], param["reference"])
 
             if param["new_panel"]:
                 ops.mod_db.import_panel_form_data(param["new_panel"])
