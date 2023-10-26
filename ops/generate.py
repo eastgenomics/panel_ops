@@ -117,6 +117,75 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     return output_file
 
 
+def generate_g2t(session, meta, reference_id: int):
+    """ Generate genes2transcripts file
+
+    Args:
+        session (SQLAlchemy session): Session object
+        meta (SQLAlchemy MetaData): Metadata object
+        reference_id (int): Reference id to use for extracting genes and
+        transcripts
+
+    Returns:
+        str: Output file
+    """
+
+    msg = "Creating g2t file"
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
+
+    gene_tb = meta.tables["gene"]
+    g2t_tb = meta.tables["genes2transcripts"]
+    tx_tb = meta.tables["transcript"]
+
+    # get the all the data that g2t requires:
+    # hgnc id, transcript, clinical status, canonical status
+    g2t_data = session.query(
+        gene_tb.c.hgnc_id, tx_tb.c.refseq_base, tx_tb.c.version,
+        g2t_tb.c.clinical_transcript, tx_tb.c.canonical
+    ).join(
+        gene_tb, gene_tb.c.id == g2t_tb.c.gene_id
+    ).join(
+        tx_tb, tx_tb.c.id == g2t_tb.c.transcript_id
+    ).filter(
+        g2t_tb.c.reference_id == reference_id
+    ).all()
+
+    data = []
+
+    # loop through the data to format it in a way to output it easily
+    for hgnc_id, refseq_base, version, clinical, canonical in g2t_data:
+        transcript = ".".join([refseq_base, str(version)])
+
+        if clinical == 0:
+            clinical_status = "not_clinical_transcript"
+        else:
+            clinical_status = "clinical_transcript"
+
+        if canonical == 0:
+            canonical_status = "not_canonical"
+        else:
+            canonical_status = "canonical"
+
+        data.append([hgnc_id, transcript, clinical_status, canonical_status])
+
+    # sort the data according to hgnc id and transcript
+    sorted_data = sorted(data, key=lambda x: (x[0], x[1]))
+
+    output_folder = write_new_output_folder("sql_dump", "g2t")
+    output_file = f"{output_folder}/{get_date()}_g2t.tsv"
+
+    with open(output_file, "w") as f:
+        for row in sorted_data:
+            data = "\t".join(row)
+            f.write(f"{data}\n")
+
+    msg = f"Created g2t file: {output_file}"
+    output_to_loggers(msg, "info", CONSOLE, GENERATION)
+
+    return output_file
+
+
+
 def generate_django_jsons(
     panel_dumps: list, clean_clinind_data: dict, g2t_data: str,
     single_genes: list, references: list, feature_types: list,
