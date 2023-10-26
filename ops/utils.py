@@ -16,8 +16,8 @@ import xlrd
 from panelapp import queries
 from hgnc_queries import get_id as hq_get_id
 
-from .hardcoded_tests import tests as hd_tests
-from .logger import setup_logging, output_to_loggers
+from hardcoded_tests import tests as hd_tests
+from logger import setup_logging, output_to_loggers
 
 
 CONSOLE, UTILS = setup_logging("utils")

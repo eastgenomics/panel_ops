@@ -1,6 +1,6 @@
 import logging.config
 
-from .config import path_to_logs
+from config import path_to_logs
 
 
 def setup_logging(type_logger):

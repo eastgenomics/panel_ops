@@ -1,7 +1,7 @@
 import json
 
-from .logger import setup_logging, output_to_loggers
-from .utils import (
+from logger import setup_logging, output_to_loggers
+from utils import (
     get_date, write_new_output_folder, parse_gemini_dump,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
