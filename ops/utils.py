@@ -1464,3 +1464,27 @@ def parse_json_file(json_file: str):
 
     with open(json_file) as f:
         return json.load(f)
+
+
+def get_reference_id(session, meta, reference: str):
+    """ Get the reference id for a given reference build name
+
+    Args:
+        session (SQLAlchemy session obj): SQLAlchemy session
+        meta (SQLAlchemy meta obj): SQLAlchemy meta
+        reference (str): Reference id
+
+    Returns:
+        int: Reference id corresponding to the reference build name
+    """
+    ref_tb = meta.tables["reference"]
+
+    ref_query = session.query(
+        ref_tb.c.id
+    ).filter(
+        ref_tb.c.name == reference
+    ).one()
+
+    assert len(ref_query) == 1, "The reference query returned 2 or more rows"
+
+    return ref_query[0]
