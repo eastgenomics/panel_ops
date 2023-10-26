@@ -57,7 +57,7 @@ def parse_args():
     )
     generate.add_argument("-m", "--manifest", help="Gemini database csv dump")
     generate.add_argument(
-        "-g2t", "--genes2transcripts",
+        "-g2t", "--genes2transcripts", action="store_true",
         help="Generate the genes2transcripts file"
     )
 
@@ -131,7 +131,9 @@ def main(**param):
     )
 
     if param["reference"]:
-        reference_id = utils.get_reference_id(param["reference"])
+        reference_id = utils.get_reference_id(
+            session, meta, param["reference"]
+        )
 
     if param["test_xls"]:
         # gather data from the test directory
