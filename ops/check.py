@@ -3,8 +3,8 @@ import regex
 
 from sqlalchemy import distinct
 
-from .logger import setup_logging, output_to_loggers
-from .utils import get_date
+from ops.logger import setup_logging, output_to_loggers
+from ops.utils import get_date
 
 
 CONSOLE, CHECK = setup_logging("check")

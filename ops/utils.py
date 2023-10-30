@@ -16,8 +16,8 @@ import xlrd
 from panelapp import queries
 from hgnc_queries import get_id as hq_get_id
 
-from .hardcoded_tests import tests as hd_tests
-from .logger import setup_logging, output_to_loggers
+from ops.hardcoded_tests import tests as hd_tests
+from ops.logger import setup_logging, output_to_loggers
 
 
 CONSOLE, UTILS = setup_logging("utils")
@@ -1464,3 +1464,30 @@ def parse_json_file(json_file: str):
 
     with open(json_file) as f:
         return json.load(f)
+
+
+def get_reference_id(session, meta, reference: str):
+    """ Get the reference id for a given reference build name
+
+    Args:
+        session (SQLAlchemy session obj): SQLAlchemy session
+        meta (SQLAlchemy meta obj): SQLAlchemy meta
+        reference (str): Reference id
+
+    Returns:
+        int: Reference id corresponding to the reference build name
+    """
+    ref_tb = meta.tables["reference"]
+
+    ref_query = session.query(
+        ref_tb.c.id
+    ).filter(
+        ref_tb.c.name == reference
+    ).one()
+
+    assert len(ref_query) == 1, (
+        "The reference query didn't return only one row:\n"
+        f"{','.join([query for query in ref_query])}"
+    )
+
+    return ref_query[0]

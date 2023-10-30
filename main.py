@@ -1,9 +1,9 @@
 import argparse
 import sys
 
-import ops
+from ops import generate, mod_db, utils, config
 
-sys.path.append(ops.config.path_to_panel_config)
+sys.path.append(config.path_to_panel_config)
 
 import config_panel_db
 
@@ -17,6 +17,11 @@ def parse_args():
 
     parser = argparse.ArgumentParser(
         description="Prepare and import data for Panelapp database"
+    )
+
+    parser.add_argument(
+        "-ref", "--reference", choices=["GRCh37", "GRCh38"],
+        help="Which reference build to use for importing or exporting g2t data"
     )
 
     parser.add_argument("-t", "--test_xls", help="NHS test directory")
@@ -51,6 +56,10 @@ def parse_args():
         help="Generate genepanels"
     )
     generate.add_argument("-m", "--manifest", help="Gemini database csv dump")
+    generate.add_argument(
+        "-g2t", "--genes2transcripts", action="store_true",
+        help="Generate the genes2transcripts file"
+    )
 
     check = subparser.add_parser("check")
     check.add_argument(
@@ -117,18 +126,27 @@ def main(**param):
     passwd = config_panel_db.passwd_ro
     host = config_panel_db.host
 
+    session, meta = utils.connect_to_db(
+        user, passwd, host, "panel_database"
+    )
+
+    if param["reference"]:
+        reference_id = utils.get_reference_id(
+            session, meta, param["reference"]
+        )
+
     if param["test_xls"]:
         # gather data from the test directory
-        clinind_data = ops.utils.parse_test_directory(param["test_xls"])
-        clean_clinind_data = ops.utils.clean_targets(clinind_data)
+        clinind_data = utils.parse_test_directory(param["test_xls"])
+        clean_clinind_data = utils.clean_targets(clinind_data)
 
         # get the single genes in the test directory to transform them into
         # single gene panels
-        single_genes = ops.utils.gather_single_genes(clean_clinind_data)
+        single_genes = utils.gather_single_genes(clean_clinind_data)
 
     if param["hgnc"] and not isinstance(param["hgnc"], list):
         # parse hgnc file
-        hgnc_data = ops.utils.parse_hgnc_dump(param["hgnc"])
+        hgnc_data = utils.parse_hgnc_dump(param["hgnc"])
 
     # Check which subparser is being used
     if param["command"] == "check":
@@ -142,23 +160,19 @@ def main(**param):
                 for ele in param["files"]
             }
 
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
-
             # gather data from panels
             (
                 panelapp_dict, superpanel_dict, gene_dict
-            ) = ops.utils.create_panelapp_dict(
+            ) = utils.create_panelapp_dict(
                 files["panels"].split(","), config_panel_db.panel_types,
                 single_genes
             )
 
             # get all the transcripts from the nirvana gff
-            g2t_data = ops.utils.parse_g2t(files["g2t"])
+            g2t_data = utils.parse_g2t(files["g2t"])
 
             # check the database data
-            check = ops.check.check_db(
+            check = check.check_db(
                 files, session, meta, panelapp_dict, superpanel_dict,
                 gene_dict, g2t_data, clean_clinind_data
             )
@@ -166,15 +180,15 @@ def main(**param):
     elif param["command"] == "generate":
         # Generate panelapp dump
         if param["panelapp_all"]:
-            all_panels = ops.utils.get_all_panels()
-            panelapp_dump = ops.generate.generate_panelapp_tsvs(
+            all_panels = utils.get_all_panels()
+            panelapp_dump = generate.generate_panelapp_tsvs(
                 all_panels, "all"
             )
 
         # Generate panelapp dump for GMS panels
         if param["panelapp_gms"]:
-            gms_panels = ops.utils.get_GMS_panels()
-            panelapp_dump = ops.generate.generate_panelapp_tsvs(
+            gms_panels = utils.get_GMS_panels()
+            panelapp_dump = generate.generate_panelapp_tsvs(
                 gms_panels, "GMS"
             )
 
@@ -200,10 +214,10 @@ def main(**param):
             }
 
             # get all transcripts in nirvana gff
-            g2t_data = ops.utils.parse_g2t(files["g2t"])
+            g2t_data = utils.parse_g2t(files["g2t"])
 
             # Generate the jsons for the import
-            ops.generate.generate_django_jsons(
+            generate.generate_django_jsons(
                 files["panels"].split(","), clean_clinind_data, g2t_data,
                 single_genes, config_panel_db.references,
                 config_panel_db.feature_types, config_panel_db.panel_types,
@@ -215,22 +229,22 @@ def main(**param):
             assert hgnc_data is not None, (
                 "-hgnc option is needed for genepanels cmd"
             )
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
-            ops.generate.generate_genepanels(session, meta, hgnc_data)
+            generate.generate_genepanels(session, meta, hgnc_data)
 
         # Generate a bioinformatic manifest type file for reports
         if param["manifest"]:
             assert hgnc_data is not None, (
                 "-hgnc option is needed for manifest cmd"
             )
-            session, meta = ops.utils.connect_to_db(
-                user, passwd, host, "panel_database"
-            )
-            sample2panels = ops.generate.generate_manifest(
+            generate.generate_manifest(
                 session, meta, param["manifest"], hgnc_data
             )
+
+        if param["genes2transcripts"]:
+            assert param["reference"], (
+                "-g2t option is needed for creating a g2t file"
+            )
+            generate.generate_g2t(session, meta, reference_id)
 
     elif param["command"] == "mod_db":
         # check if the credentials for panel admin are correct
@@ -240,7 +254,7 @@ def main(**param):
         ):
             # Import given django fixture to the database
             if param["initial_import"]:
-                ops.mod_db.import_django_fixture(param["initial_import"])
+                mod_db.import_django_fixture(param["initial_import"])
 
             # Import HGNC dump file
             if param["hgnc"]:
@@ -248,51 +262,54 @@ def main(**param):
                     ele.split("=")[0]: ele.split("=")[1]
                     for ele in param["hgnc"]
                 }
-                ops.mod_db.import_hgnc_dump(args["hgnc"], args["date"])
+                mod_db.import_hgnc_dump(args["hgnc"], args["date"])
 
             if param["g2t"]:
-                ops.mod_db.import_new_g2t(param["g2t"])
+                assert param["reference"], (
+                    "-g2t option is needed for creating a g2t file"
+                )
+                mod_db.import_new_g2t(param["g2t"], reference_id)
 
             if param["new_panel"]:
-                ops.mod_db.import_panel_form_data(param["new_panel"])
+                mod_db.import_panel_form_data(param["new_panel"])
 
             if param["update_panelapp"]:
                 panel_info = {
                     ele.split("=")[0]: ele.split("=")[1]
                     for ele in param["update_panelapp"]
                 }
-                ops.mod_db.update_panelapp_panel(
+                mod_db.update_panelapp_panel(
                     panel_info["panelapp_id"], panel_info["version"]
                 )
 
             if param["update_panelapp_bulk"]:
-                panels = ops.utils.parse_panelapp_update_file(
+                panels = utils.parse_panelapp_update_file(
                     param["update_panelapp_bulk"]
                 )
 
                 for panel in panels:
-                    ops.mod_db.update_panelapp_panel(
+                    mod_db.update_panelapp_panel(
                         panel["panelapp_id"], panel["version"]
                     )
 
             if param["deploy_test_directory"]:
-                td_data = ops.utils.parse_json_file(
+                td_data = utils.parse_json_file(
                     param["deploy_test_directory"]
                 )
 
                 if param["ci_to_keep"]:
-                    ci_to_keep = ops.mod_db.gather_ci_and_panels_to_keep(
+                    ci_to_keep = mod_db.gather_ci_and_panels_to_keep(
                         param["ci_to_keep"]
                     )
                 else:
                     ci_to_keep = []
 
-                ops.mod_db.clear_old_clinical_indications_panels(ci_to_keep)
+                mod_db.clear_old_clinical_indications_panels(ci_to_keep)
 
-                cp_data, pf_data = ops.mod_db.create_objects_for_td(
+                cp_data, pf_data = mod_db.create_objects_for_td(
                     td_data, ci_to_keep
                 )
-                ops.mod_db.import_td(cp_data, pf_data)
+                mod_db.import_td(cp_data, pf_data)
 
 
 if __name__ == "__main__":

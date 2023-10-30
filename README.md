@@ -45,6 +45,8 @@ python main.py -t ${national_test_directory_xls} generate -j panels=${panelapp_d
 python main.py generate -gp 
 # output sql_dump/${day}_sample2genes.tsv
 python main.py generate -m manifest.csv
+# output sql_dump/${day}_g2t.tsv
+python main.py --reference ${reference_name} generate -g2t
 
 # check db structure against panelapp dump
 python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
@@ -54,7 +56,7 @@ python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -i 
 # import hgnc data
 python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
 # import g2t data
-python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -g2t ${g2t_file}
+python main.py --reference ${reference_name} --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -g2t ${g2t_file}
 # import bespoke panels
 python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -new_panel ${xls_file}
 # import new test directory
