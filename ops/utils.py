@@ -1485,6 +1485,9 @@ def get_reference_id(session, meta, reference: str):
         ref_tb.c.name == reference
     ).one()
 
-    assert len(ref_query) == 1, "The reference query returned 2 or more rows"
+    assert len(ref_query) == 1, (
+        "The reference query didn't return only one row:\n"
+        f"{','.join([query for query in ref_query])}"
+    )
 
     return ref_query[0]
