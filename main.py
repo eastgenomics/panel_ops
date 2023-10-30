@@ -241,7 +241,7 @@ def main(**param):
             )
 
         if param["genes2transcripts"]:
-            assert param["reference"] is not None, (
+            assert param["reference"], (
                 "-g2t option is needed for creating a g2t file"
             )
             generate.generate_g2t(session, meta, reference_id)
@@ -265,10 +265,10 @@ def main(**param):
                 mod_db.import_hgnc_dump(args["hgnc"], args["date"])
 
             if param["g2t"]:
-                assert param["reference"] is not None, (
+                assert param["reference"], (
                     "-g2t option is needed for creating a g2t file"
                 )
-                mod_db.import_new_g2t(param["g2t"], param["reference"])
+                mod_db.import_new_g2t(param["g2t"], reference_id)
 
             if param["new_panel"]:
                 mod_db.import_panel_form_data(param["new_panel"])
