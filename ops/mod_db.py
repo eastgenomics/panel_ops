@@ -644,7 +644,7 @@ def create_objects_for_td(td_data, ci_to_keep):
                         pf_link = PanelFeatures(
                             panel_version=panel_version, description=(
                                 "Update test directory: "
-                                f"{td_data['source']}"
+                                f"{td_data['config_source']}"
                             )
                         )
 
@@ -662,7 +662,7 @@ def create_objects_for_td(td_data, ci_to_keep):
 
                     # extract date of the source for the clinical indication
                     # versions
-                    td_date, td_type = td_data["source"].split("_")
+                    td_date, td_type = td_data["config_source"].split("_")
                     td_date_str = datetime.datetime.strptime(
                         td_date, "%y%m%d"
                     ).strftime("%Y-%m-%d")
