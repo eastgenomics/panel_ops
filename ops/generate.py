@@ -94,14 +94,17 @@ def generate_genepanels(session, meta, hgnc_data: dict):
     output_data = set()
 
     for ci, panel_data in gemini2genes.items():
+        ci_name, panelapp_id = ci.split(":")
         for panel, genes in panel_data.items():
             for gene in genes:
                 output_data.add(
-                    (ci, panel, gene)
+                    (ci_name, panel, gene, panelapp_id)
                 )
 
     # sort the data using panel names and genes
-    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[1], x[2]))
+    sorted_output_data = sorted(
+        output_data, key=lambda x: (x[0], x[1], x[2], x[3])
+    )
 
     output_folder = write_new_output_folder("sql_dump", "genepanels")
     output_file = f"{output_folder}/{get_date()}_genepanels.tsv"
