@@ -1228,7 +1228,8 @@ def get_clinical_indication_through_genes(
             # query to get all genes from a panel id
             data = session.query(
                 panel_tb.c.name, panel2features_tb.c.feature_id,
-                panel2features_tb.c.panel_version, gene_tb.c.hgnc_id
+                panel2features_tb.c.panel_version, gene_tb.c.hgnc_id,
+                panel_tb.c.panelapp_id
             ).join(panel2features_tb).join(feature_tb).join(gene_tb).filter(
                 panel2features_tb.c.panel_id == panel_id
             ).all()
@@ -1236,10 +1237,11 @@ def get_clinical_indication_through_genes(
             # use the packaging package to parse the version and take the latest
             # version
             latest_version = get_latest_panel_version([d[2] for d in data])
-            panel_genes = [(d[0], d[2], d[3]) for d in data]
+            panel_genes = [(d[0], d[2], d[3], d[4]) for d in data]
             hgnc_ids = []
 
-            for panel, panel_version, hgnc_id in panel_genes:
+            for panel, panel_version, hgnc_id, panelapp_id in panel_genes:
+                ci_info = f"{ci}:{panelapp_id}"
                 if "|" in panel_version:
                     formatted_version = panel_version.split("|")
                 else:
@@ -1265,7 +1267,7 @@ def get_clinical_indication_through_genes(
 
             latest_version = "|".join(latest_version).strip("|")
 
-            gemini2genes[ci][f"{panel}_{latest_version}"].update(hgnc_ids)
+            gemini2genes[ci_info][f"{panel}_{latest_version}"].update(hgnc_ids)
 
     return gemini2genes
 
