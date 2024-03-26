@@ -3,9 +3,9 @@ import os
 import sys
 
 import django
+from django.db import transaction
 from panelapp import Panelapp, queries
 from packaging import version
-import regex
 
 from ops.config import path_to_panel_palace
 from ops.logger import setup_logging, output_to_loggers
@@ -514,6 +514,7 @@ def update_panelapp_panel(panelapp_id: int, version: str):
     return db_panel_id
 
 
+@transaction.atomic
 def create_objects_for_td(td_data, ci_to_keep):
     """ Create objects for the test directory
 
@@ -539,12 +540,9 @@ def create_objects_for_td(td_data, ci_to_keep):
     feature_type = FeatureType.objects.get(type="gene")
 
     output_to_loggers(
-        "Gathering objects for test directory deployment...", "info",
-        MOD_DB, CONSOLE
+        "Creating and importing objects for test directory deployment...",
+        "info", MOD_DB, CONSOLE
     )
-
-    cp_info_to_import = []
-    pf_info_to_import = []
 
     codes_of_cis_to_be_kept = [ci.code for ci, panel in ci_to_keep]
 
@@ -557,108 +555,76 @@ def create_objects_for_td(td_data, ci_to_keep):
             )
             continue
 
-        ci = ClinicalIndication(
+        ci_obj, created = ClinicalIndication.objects.get_or_create(
             code=indication["code"], name=indication["name"],
             gemini_name=indication["gemini_name"]
         )
 
-        panels_to_import = []
-        cp_to_import = []
+        genes = set()
 
         # some indications are None because test directory have Relevant Panel
         # so check if we have panels for the clinical indication
         if indication["panels"]:
             for panel in indication["panels"]:
-                panel_to_import = None
-                genes = None
-
-                genes_to_import = []
-                features_to_import = []
-                pf_to_import = []
-
                 # some panels are None because typos in gene symbols
                 if panel:
                     # detect if panel is a single gene
                     if "HGNC:" in panel:
-                        panel_to_import = Panel(
+                        panel_obj, created = Panel.objects.get_or_create(
                             name=f"{panel}_SG_panel", panelapp_id="",
                             panel_type_id=single_gene_panel_type.id
                         )
-                        genes = [panel]
+                        genes.add(panel)
 
                     # panelapp panel id
                     else:
                         # check if the panel is in the signedoff panel dump
                         # R59.3 points to an internal panel for example
                         if int(panel) in signedoff_panels:
-                            panel_to_import = Panel(
+                            panel_obj, created = Panel.objects.get_or_create(
                                 name=signedoff_panels[int(panel)].name,
                                 panelapp_id=panel,
                                 panel_type_id=gms_panel_type.id
                             )
-                            genes = set([
+                            genes.update([
                                 gene["hgnc_id"]
                                 for gene in signedoff_panels[int(panel)].get_genes(3)
                             ])
                         else:
                             msg = (
-                                f"{ci.code} points to an unaccessible "
+                                f"{ci_obj.code} points to an unaccessible "
                                 f"panelapp panel {panel}"
                             )
                             output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
                             continue
 
-                    panels_to_import.append(panel_to_import)
-
                     # check all genes are in the database
                     for gene in genes:
-                        if not check_if_gene_in_database(gene):
-                            gene_obj = Gene(hgnc_id=gene)
-                            feature_obj = Feature(
-                                feature_type_id=feature_type.id
-                            )
-                        else:
-                            gene_obj = Gene.objects.get(hgnc_id=gene)
-                            feature_obj = Feature.objects.get(
-                                gene_id=gene_obj.id
-                            )
-
-                        # add the gene/feature objects to the list of genes and
-                        # features associated with the panel
-                        genes_to_import.append(gene_obj)
-                        features_to_import.append(feature_obj)
+                        gene_obj, created = Gene.objects.get_or_create(hgnc_id=gene)
+                        feature_obj, created = Feature.objects.get_or_create(
+                            feature_type_id=feature_type.id, gene=gene_obj
+                        )
 
                         # get the version of the panel
                         if (
-                            panel_to_import.panelapp_id and
-                            int(panel_to_import.panelapp_id) in signedoff_panels
+                            panel_obj.panelapp_id and
+                            int(panel_obj.panelapp_id) in signedoff_panels
                         ):
                             panel_version = signedoff_panels[
-                                int(panel_to_import.panelapp_id)
+                                int(panel_obj.panelapp_id)
                             ].version
                         else:
                             # assign default version to the single gene panels
                             panel_version = "1.0.0"
 
                         # create the panelfeature object
-                        pf_link = PanelFeatures(
+                        pf_link = PanelFeatures.objects.get_or_create(
                             panel_version=panel_version, description=(
                                 "Update test directory: "
                                 f"{td_data['config_source']}"
-                            )
+                            ),
+                            panel=panel_obj, feature=feature_obj
                         )
-
-                        # gather links for every feature of the panel
-                        pf_to_import.append(pf_link)
-
-                    # add panels, links and features in the list of things that
-                    # will need to be imported
-                    pf_info_to_import.append(
-                        [
-                            panel_to_import, pf_to_import, features_to_import,
-                            genes_to_import
-                        ]
-                    )
 
                     # extract date of the source for the clinical indication
                     # versions
@@ -668,12 +634,11 @@ def create_objects_for_td(td_data, ci_to_keep):
                     ).strftime("%Y-%m-%d")
 
                     # create link between clinical indication and panel
-                    cp_link = ClinicalIndicationPanels(
-                        ci_version=f"TD_{td_date_str}"
+                    cp_link = ClinicalIndicationPanels.objects.get_or_create(
+                        ci_version=f"TD_{td_date_str}",
+                        panel=panel_obj,
+                        clinical_indication=ci_obj
                     )
-
-                    # gather all links for that clinical indication
-                    cp_to_import.append(cp_link)
 
                 else:
                     output_to_loggers(
@@ -684,68 +649,8 @@ def create_objects_for_td(td_data, ci_to_keep):
                         "warning", MOD_DB, CONSOLE
                     )
 
-        # add clinical indication and its links to the list of things to import
-        cp_info_to_import.append([ci, cp_to_import, panels_to_import])
-
     output_to_loggers(
-        f"Gathering of objects to import finished...",
-        "info", MOD_DB, CONSOLE
-    )
-
-    return cp_info_to_import, pf_info_to_import
-
-
-def import_td(cp_info_to_import, pf_info_to_import):
-    """ Import the clinical indications, panels, features, genes and the links
-
-    Args:
-        cp_info_to_import (list): List of clinical indications with panels and
-        the links
-        pf_info_to_import (list): List of panels with features and links
-    """
-
-    output_to_loggers(
-        f"Importing objects to the database...",
-        "info", MOD_DB, CONSOLE
-    )
-
-    for ci, ci_panel_links, panels in cp_info_to_import:
-        ci.save()
-
-        for panel, ci_panel_link in zip(panels, ci_panel_links):
-            # in order to check that the panel has not been updated already,
-            # query the database for a panel with the same name
-            in_database_panel = Panel.objects.filter(name=panel.name)
-
-            if in_database_panel:
-                ci_panel_link.clinical_indication_id = ci.id
-                ci_panel_link.panel_id = in_database_panel.get().id
-                ci_panel_link.save()
-            else:
-                panel.save()
-                # populate the link with the ids of the clinical indication and
-                # the panel
-                ci_panel_link.clinical_indication_id = ci.id
-                ci_panel_link.panel_id = panel.id
-                ci_panel_link.save()
-
-    for panel, panel_feature_links, features, genes in pf_info_to_import:
-        # loop through links, features and genes in parallel
-        for panel_feature_link, feature, gene in zip(
-            panel_feature_links, features, genes
-        ):
-            gene.save()
-            # get gene id from recently created gene for feature foreign key
-            feature.gene_id = gene.id
-            feature.save()
-            panel = Panel.objects.filter(name=panel.name).get()
-            # assign ids in panel feature link
-            panel_feature_link.panel_id = panel.id
-            panel_feature_link.feature_id = feature.id
-            panel_feature_link.save()
-
-    output_to_loggers(
-        f"Import finished!",
+        "Gathering of objects to import finished...",
         "info", MOD_DB, CONSOLE
     )
 
