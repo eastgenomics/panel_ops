@@ -516,7 +516,13 @@ def update_panelapp_panel(panelapp_id: int, version: str):
 
 @transaction.atomic
 def create_objects_for_td(td_data, ci_to_keep):
-    """ Create objects for the test directory
+    """ Create objects for the test directory:
+    - Clinical indication
+    - Clinical indication panels
+    - Panel
+    - Panel features
+    - Feature
+    - Gene
 
     Args:
         td_data (dict): Dict containing the info parsed from the test directory
