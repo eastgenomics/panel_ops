@@ -842,12 +842,3 @@ def clear_old_clinical_indications_panels(ci_data):
         "Deleting clinical indications...", "info", MOD_DB, CONSOLE
     )
     clinical_indication_to_delete.delete()
-
-
-def check_if_gene_in_database(gene):
-    try:
-        Gene.objects.get(hgnc_id=gene)
-    except Exception:
-        return False
-    else:
-        return True
