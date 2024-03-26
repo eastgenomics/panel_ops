@@ -526,6 +526,25 @@ def create_objects_for_td(td_data, ci_to_keep):
 
     Args:
         td_data (dict): Dict containing the info parsed from the test directory
+        Example td_data:
+        {
+            "td_source": "Name of test directory file name",
+            "config_source": "Config file name used",
+            "date": "YYMMDD",
+            "indications": [
+                {
+                    "name": "Clinical indication name",
+                    "code": "Clinical indication code",
+                    "gemini_name": "{code}_{name}_{P/G}",
+                    "test_method": "Test method",
+                    "panels": [
+                        "Panelapp id"
+                    ],
+                    "original_targets": "Original target in the test directory",
+                    "changes": ""
+                }
+            ]
+        }
         ci_to_keep (list): List of test codes to not import in the database
 
     Returns:
