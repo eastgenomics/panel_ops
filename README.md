@@ -43,8 +43,6 @@ python main.py -t ${national_test_directory_xls} generate -j panels=${panelapp_d
 # RNA AND MITOCHONDRIAL GENES ARE REMOVED TO GENERATE REPORTS
 # output sql_dump/${day}_genepanels.txt
 python main.py generate -gp 
-# output sql_dump/${day}_sample2genes.tsv
-python main.py generate -m manifest.csv
 # output sql_dump/${day}_g2t.tsv
 python main.py --reference ${reference_name} generate -g2t
 
