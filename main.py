@@ -31,27 +31,6 @@ def parse_args():
 
     generate = subparser.add_parser("generate")
     generate.add_argument(
-        "-gms", "--panelapp_gms", action="store_true",
-        help="Generate panelapp GMS dump"
-    )
-    generate.add_argument(
-        "-all", "--panelapp_all", action="store_true",
-        help="Generate all panelapp dump"
-    )
-    generate.add_argument(
-        "-j", "--json", metavar="KEY=VALUE", nargs=2,
-        help=(
-            "Generate django json that need to be imported in the database. "
-            "Generating the jsons files require 2 files: "
-            "the panelapp dump(s)/custom dump(s) to actually import, "
-            "genes2transcripts file. They need to be given as following: "
-            "panels=folder,folder g2t=file. The panelapp dump file path "
-            "should contain the following string: gms, non-gms, in-house, "
-            "single_gene. This allows to find the type of panel the folder "
-            "contains."
-        )
-    )
-    generate.add_argument(
         "-gp", "--genepanels", action="store_true",
         help="Generate genepanels"
     )
@@ -178,52 +157,6 @@ def main(**param):
             )
 
     elif param["command"] == "generate":
-        # Generate panelapp dump
-        if param["panelapp_all"]:
-            all_panels = utils.get_all_panels()
-            panelapp_dump = generate.generate_panelapp_tsvs(
-                all_panels, "all"
-            )
-
-        # Generate panelapp dump for GMS panels
-        if param["panelapp_gms"]:
-            gms_panels = utils.get_GMS_panels()
-            panelapp_dump = generate.generate_panelapp_tsvs(
-                gms_panels, "GMS"
-            )
-
-        # Generate django fixture using given panelapp dump
-        if param["json"]:
-            assert clean_clinind_data is not None, (
-                "-t option is needed for generate json cmd"
-            )
-            files = {
-                ele.split("=")[0]: ele.split("=")[1]
-                for ele in param["json"]
-            }
-
-            # Primary keys for importing the data in the database
-            pk_dict = {
-                # they start at 0 because I loop over those elements
-                # makes it easier to keep track off
-                # + might that in the update process later (i.e. get last ele
-                # in a table and put it in the pk_dict)
-                "clinind": 0, "panel": 0, "reference": 0, "feature_type": 0,
-                "clinind_panels": 0, "feature": 0, "panel_feature": 0,
-                "gene": 0, "panel_type": 0, "transcript": 0, "g2t": 0
-            }
-
-            # get all transcripts in nirvana gff
-            g2t_data = utils.parse_g2t(files["g2t"])
-
-            # Generate the jsons for the import
-            generate.generate_django_jsons(
-                files["panels"].split(","), clean_clinind_data, g2t_data,
-                single_genes, config_panel_db.references,
-                config_panel_db.feature_types, config_panel_db.panel_types,
-                pk_dict
-            )
-
         # Generate genepanels file from database
         if param["genepanels"]:
             assert hgnc_data is not None, (
@@ -252,10 +185,6 @@ def main(**param):
             param["user"] == config_panel_db.user_admin and
             param["passwd"] == config_panel_db.passwd_admin
         ):
-            # Import given django fixture to the database
-            if param["initial_import"]:
-                mod_db.import_django_fixture(param["initial_import"])
-
             # Import HGNC dump file
             if param["hgnc"]:
                 args = {
@@ -306,10 +235,9 @@ def main(**param):
 
                 mod_db.clear_old_clinical_indications_panels(ci_to_keep)
 
-                cp_data, pf_data = mod_db.create_objects_for_td(
+                mod_db.create_objects_for_td(
                     td_data, ci_to_keep
                 )
-                mod_db.import_td(cp_data, pf_data)
 
 
 if __name__ == "__main__":
