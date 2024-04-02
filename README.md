@@ -48,9 +48,6 @@ python main.py generate -m manifest.csv
 # output sql_dump/${day}_g2t.tsv
 python main.py --reference ${reference_name} generate -g2t
 
-# check db structure against panelapp dump
-python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
-
 # import the data in the database
 python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
 # import hgnc data
