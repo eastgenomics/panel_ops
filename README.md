@@ -31,14 +31,6 @@ Usage:
 ```bash
 source /home/panels/panel_env/bin/activate
 
-# output all panelapp panels in folder ${day}_panelapp_dump
-python main.py generate -all 
-# output gms panelapp panels in folder ${day}_panelapp_dump
-python main.py generate -gms 
-
-# output django_fixtures/${day}/${day}_${table_name}.json and django_fixtures/${day}/${day}_json_dump.json
-python main.py -t ${national_test_directory_xls} generate -j panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
-
 # WARNING THE FOLLOWING 2 FILES DO NOT REFLECT WHAT IS STORED IN THE DATABASE
 # RNA AND MITOCHONDRIAL GENES ARE REMOVED TO GENERATE REPORTS
 # output sql_dump/${day}_genepanels.txt
@@ -51,8 +43,6 @@ python main.py --reference ${reference_name} generate -g2t
 # check db structure against panelapp dump
 python main.py -t ${national_test_directory_xls} check panels=${panelapp_dump_folder};${in-house_dump} g2t=${g2t_file}
 
-# import the data in the database
-python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -i django_fixtures/${day}/${day}_json_dump.json
 # import hgnc data
 python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} -hgnc hgnc=${hgnc_dump} date=${date}
 # import g2t data
@@ -65,4 +55,4 @@ python main.py --hgnc ${hgnc_dump_file} mod_db ${admin_user} ${admin_passwd} --d
 
 ## What does this output?
 
-Panelapp dump of the day, django fixtures, sql dumps...
+Panelapp dump of the day, sql dumps...
