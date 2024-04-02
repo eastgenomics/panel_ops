@@ -61,15 +61,6 @@ def parse_args():
         help="Generate the genes2transcripts file"
     )
 
-    check = subparser.add_parser("check")
-    check.add_argument(
-        "files", metavar="KEY=VALUE", nargs=2,
-        help=(
-            "Provide panelapp dump and genes2transcripts. The format for "
-            "passing those arguments is: panels=folder,folder g2t=file"
-        )
-    )
-
     mod_db = subparser.add_parser("mod_db")
     mod_db.add_argument("user", help="Admin username for panel_database")
     mod_db.add_argument("passwd", help="Admin passwd for panel_database")
@@ -149,35 +140,7 @@ def main(**param):
         hgnc_data = utils.parse_hgnc_dump(param["hgnc"])
 
     # Check which subparser is being used
-    if param["command"] == "check":
-        assert clean_clinind_data is not None, (
-            "-t option is needed for check cmd"
-        )
-        # Check integrity of database for all things panel
-        if param["files"]:
-            files = {
-                ele.split("=")[0]: ele.split("=")[1]
-                for ele in param["files"]
-            }
-
-            # gather data from panels
-            (
-                panelapp_dict, superpanel_dict, gene_dict
-            ) = utils.create_panelapp_dict(
-                files["panels"].split(","), config_panel_db.panel_types,
-                single_genes
-            )
-
-            # get all the transcripts from the nirvana gff
-            g2t_data = utils.parse_g2t(files["g2t"])
-
-            # check the database data
-            check = check.check_db(
-                files, session, meta, panelapp_dict, superpanel_dict,
-                gene_dict, g2t_data, clean_clinind_data
-            )
-
-    elif param["command"] == "generate":
+    if param["command"] == "generate":
         # Generate panelapp dump
         if param["panelapp_all"]:
             all_panels = utils.get_all_panels()
