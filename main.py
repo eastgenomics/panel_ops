@@ -55,7 +55,6 @@ def parse_args():
         "-gp", "--genepanels", action="store_true",
         help="Generate genepanels"
     )
-    generate.add_argument("-m", "--manifest", help="Gemini database csv dump")
     generate.add_argument(
         "-g2t", "--genes2transcripts", action="store_true",
         help="Generate the genes2transcripts file"
@@ -230,15 +229,6 @@ def main(**param):
                 "-hgnc option is needed for genepanels cmd"
             )
             generate.generate_genepanels(session, meta, hgnc_data)
-
-        # Generate a bioinformatic manifest type file for reports
-        if param["manifest"]:
-            assert hgnc_data is not None, (
-                "-hgnc option is needed for manifest cmd"
-            )
-            generate.generate_manifest(
-                session, meta, param["manifest"], hgnc_data
-            )
 
         if param["genes2transcripts"]:
             assert param["reference"], (

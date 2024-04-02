@@ -2,7 +2,7 @@ import json
 
 from ops.logger import setup_logging, output_to_loggers
 from ops.utils import (
-    get_date, write_new_output_folder, parse_gemini_dump,
+    get_date, write_new_output_folder,
     create_panelapp_dict, gather_ref_django_json,
     gather_panel_types_django_json, gather_feature_types_django_json,
     gather_panel_data_django_json, gather_superpanel_data_django_json,
@@ -298,87 +298,3 @@ def generate_django_jsons(
     output_to_loggers(msg, "info", CONSOLE, GENERATION)
 
     return output_folder
-
-
-def generate_manifest(session, meta, gemini_dump: str, hgnc_data: dict):
-    """ Generate new bioinformatic manifest for the new database
-
-    Args:
-        session (SQLAlchemy Session): Session to make queries
-        meta (SQLAlchemy metadata): Metadata to get the tables from the
-                                    existing db
-        gemini_dump (str): Gemini dump file
-
-    Returns:
-        str: File path of the output file
-    """
-
-    msg = "Creating bioinformatic manifest file"
-    output_to_loggers(msg, "info", CONSOLE, GENERATION)
-
-    # get the content of the gemini dump
-    sample2gemini_name = parse_gemini_dump(gemini_dump)
-
-    # get the panels/genes from the db now
-    ci_tb = meta.tables["clinical_indication"]
-    ci2panels_tb = meta.tables["clinical_indication_panels"]
-
-    uniq_used_panels = set([
-        panel
-        for ele in sample2gemini_name.values()
-        for panel in ele
-    ])
-
-    # get the gemini names and associated genes and panels ids
-    ci_in_manifest = session.query(
-        ci_tb.c.gemini_name, ci2panels_tb.c.panel_id, ci2panels_tb.c.ci_version
-    ).join(
-        ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
-    ).filter(
-        ci_tb.c.gemini_name.in_(uniq_used_panels)
-    ).all()
-
-    ci2panels = get_latest_clinical_indication_data(ci_in_manifest)
-
-    gemini2genes = get_clinical_indication_through_genes(
-        session, meta, ci2panels, hgnc_data
-    )
-
-    # we want a pretty file so store the data that we want to output in a nice
-    # way
-    output_data = set()
-
-    for sample, clinical_indications in sample2gemini_name.items():
-        for clinical_indication in clinical_indications:
-            # match gemini names from the dump to the genes in the db
-            if clinical_indication in gemini2genes:
-                for panel in gemini2genes[clinical_indication]:
-                    genes = gemini2genes[clinical_indication][panel]
-
-                    for gene in genes:
-                        # match format of the bioinformatic manifest
-                        output_data.add(
-                            (sample, clinical_indication, panel, gene)
-                        )
-            else:
-                # check if it is a single gene panel
-                if clinical_indication.startswith("_"):
-                    gene = clinical_indication.strip("_")
-                    # match format of the bioinformatic manifest
-                    output_data.add((sample, f"_{gene}", f"_{gene}", gene))
-
-    # and sort it using sample id and the gene symbol
-    sorted_output_data = sorted(output_data, key=lambda x: (x[0], x[3]))
-
-    output_folder = write_new_output_folder("sql_dump", "bio_manifest")
-    output_file = f"{output_folder}/{get_date()}_bio_manifest.tsv"
-
-    with open(output_file, "w") as f:
-        for row in sorted_output_data:
-            data = "\t".join(row)
-            f.write(f"{data}\n")
-
-    msg = f"Created sample2panels file: {output_file}"
-    output_to_loggers(msg, "info", CONSOLE, GENERATION)
-
-    return output_file
