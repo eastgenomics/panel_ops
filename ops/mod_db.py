@@ -675,7 +675,7 @@ def create_objects_for_td(td_data, ci_to_keep):
                     )
 
     output_to_loggers(
-        "Gathering of objects to import finished...",
+        "Finished creating and importing objects in the database !",
         "info", MOD_DB, CONSOLE
     )
 
