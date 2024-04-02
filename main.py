@@ -306,10 +306,7 @@ def main(**param):
 
                 mod_db.clear_old_clinical_indications_panels(ci_to_keep)
 
-                cp_data, pf_data = mod_db.create_objects_for_td(
-                    td_data, ci_to_keep
-                )
-                mod_db.import_td(cp_data, pf_data)
+                mod_db.create_objects_for_td(td_data, ci_to_keep)
 
 
 if __name__ == "__main__":

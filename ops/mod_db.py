@@ -585,12 +585,12 @@ def create_objects_for_td(td_data, ci_to_keep):
             gemini_name=indication["gemini_name"]
         )
 
-        genes = set()
-
         # some indications are None because test directory have Relevant Panel
         # so check if we have panels for the clinical indication
         if indication["panels"]:
             for panel in indication["panels"]:
+                genes = set()
+
                 # some panels are None because typos in gene symbols
                 if panel:
                     # detect if panel is a single gene
@@ -675,7 +675,7 @@ def create_objects_for_td(td_data, ci_to_keep):
                     )
 
     output_to_loggers(
-        "Gathering of objects to import finished...",
+        "Finished creating and importing objects in the database !",
         "info", MOD_DB, CONSOLE
     )
 
