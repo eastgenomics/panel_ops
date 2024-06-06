@@ -588,9 +588,9 @@ def create_objects_for_td(td_data, ci_to_keep):
         # some indications are None because test directory have Relevant Panel
         # so check if we have panels for the clinical indication
         if indication["panels"]:
-            for panel in indication["panels"]:
-                genes = set()
+            panel_genes = {}
 
+            for panel in indication["panels"]:
                 # some panels are None because typos in gene symbols
                 if panel:
                     # detect if panel is a single gene
@@ -599,7 +599,7 @@ def create_objects_for_td(td_data, ci_to_keep):
                             name=f"{panel}_SG_panel", panelapp_id="",
                             panel_type_id=single_gene_panel_type.id
                         )
-                        genes.add(panel)
+                        panel_genes.setdefault(panel_obj, set()).add(panel)
 
                     # panelapp panel id
                     else:
@@ -611,7 +611,7 @@ def create_objects_for_td(td_data, ci_to_keep):
                                 panelapp_id=panel,
                                 panel_type_id=gms_panel_type.id
                             )
-                            genes.update([
+                            panel_genes.setdefault(panel_obj, set()).update([
                                 gene["hgnc_id"]
                                 for gene in signedoff_panels[int(panel)].get_genes(3)
                             ])
@@ -622,57 +622,61 @@ def create_objects_for_td(td_data, ci_to_keep):
                             )
                             output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
                             continue
-
-                    # check all genes are in the database
-                    for gene in genes:
-                        gene_obj, created = Gene.objects.get_or_create(hgnc_id=gene)
-                        feature_obj, created = Feature.objects.get_or_create(
-                            feature_type_id=feature_type.id, gene=gene_obj
-                        )
-
-                        # get the version of the panel
-                        if (
-                            panel_obj.panelapp_id and
-                            int(panel_obj.panelapp_id) in signedoff_panels
-                        ):
-                            panel_version = signedoff_panels[
-                                int(panel_obj.panelapp_id)
-                            ].version
-                        else:
-                            # assign default version to the single gene panels
-                            panel_version = "1.0.0"
-
-                        # create the panelfeature object
-                        pf_link = PanelFeatures.objects.get_or_create(
-                            panel_version=panel_version, description=(
-                                "Update test directory: "
-                                f"{td_data['config_source']}"
-                            ),
-                            panel=panel_obj, feature=feature_obj
-                        )
-
-                    # extract date of the source for the clinical indication
-                    # versions
-                    td_date, td_type = td_data["config_source"].split("_")
-                    td_date_str = datetime.datetime.strptime(
-                        td_date, "%y%m%d"
-                    ).strftime("%Y-%m-%d")
-
-                    # create link between clinical indication and panel
-                    cp_link = ClinicalIndicationPanels.objects.get_or_create(
-                        ci_version=f"TD_{td_date_str}",
-                        panel=panel_obj,
-                        clinical_indication=ci_obj
-                    )
-
                 else:
-                    output_to_loggers(
-                        (
-                            f"'{panel}' from '{indication['code']}' will not "
-                            "be imported"
-                        ),
-                        "warning", MOD_DB, CONSOLE
+                    print(panel)
+
+            # check all genes are in the database
+            for panel_obj, genes in panel_genes.items():
+                for gene in genes:
+                    gene_obj, created = Gene.objects.get_or_create(hgnc_id=gene)
+                    feature_obj, created = Feature.objects.get_or_create(
+                        feature_type_id=feature_type.id, gene=gene_obj
                     )
+
+                    # get the version of the panel
+                    if (
+                        panel_obj.panelapp_id and
+                        int(panel_obj.panelapp_id) in signedoff_panels
+                    ):
+                        panel_version = signedoff_panels[
+                            int(panel_obj.panelapp_id)
+                        ].version
+                    else:
+                        # assign default version to the single gene panels
+                        panel_version = "1.0.0"
+
+                    # create the panelfeature object
+                    pf_link = PanelFeatures.objects.get_or_create(
+                        panel_version=panel_version, description=(
+                            "Update test directory: "
+                            f"{td_data['config_source']}"
+                        ),
+                        panel=panel_obj, feature=feature_obj
+                    )
+
+                # extract date of the source for the clinical indication
+                # versions
+                td_date, td_type = td_data["config_source"].split("_")
+                td_date_str = datetime.datetime.strptime(
+                    td_date, "%y%m%d"
+                ).strftime("%Y-%m-%d")
+
+                # create link between clinical indication and panel
+                cp_link = ClinicalIndicationPanels.objects.get_or_create(
+                    ci_version=f"TD_{td_date_str}",
+                    panel=panel_obj,
+                    clinical_indication=ci_obj
+                )
+
+        # else:
+            
+        #     output_to_loggers(
+        #         (
+        #             f"'{indication['panels']}' from '{indication['code']}' will not "
+        #             "be imported"
+        #         ),
+        #         "warning", MOD_DB, CONSOLE
+        #     )
 
     output_to_loggers(
         "Finished creating and importing objects in the database !",
@@ -777,10 +781,10 @@ def check_if_ci_data_in_database(data: dict):
                 panel_id__in=panel_ids
             ).values_list("panel_version", flat=True)
 
-            for version in versions_of_panel:
+            for panel_version in versions_of_panel:
                 features_from_database = set(
                     PanelFeatures.objects.filter(
-                        panel_id__in=panel_ids, panel_version=version
+                        panel_id__in=panel_ids, panel_version=panel_version
                     ).values_list("feature_id", flat=True)
                 )
 
