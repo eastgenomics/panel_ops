@@ -623,7 +623,13 @@ def create_objects_for_td(td_data, ci_to_keep):
                             output_to_loggers(msg, "warning", MOD_DB, CONSOLE)
                             continue
                 else:
-                    print(panel)
+                    output_to_loggers(
+                        (
+                            f"'{indication['code']}' contains a panel that "
+                            f"will not be imported: '{panel}'"
+                        ),
+                        "warning", MOD_DB, CONSOLE
+                    )
 
             # check all genes are in the database
             for panel_obj, genes in panel_genes.items():
