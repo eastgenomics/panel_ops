@@ -7,7 +7,6 @@ from pathlib import Path
 
 from packaging import version
 import pandas as pd
-import regex
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.schema import MetaData
@@ -138,8 +137,8 @@ def get_panel_type(type_of_panels: list, dump_folder: str):
     # Try and find the panel type using the name of
     # the folder the panels were stored
     for panel_type in type_of_panels:
-        if regex.search(
-            panel_type, dump_folder, regex.IGNORECASE
+        if re.search(
+            panel_type, dump_folder, re.IGNORECASE
         ):
             assigned_panel_type = panel_type
 
@@ -484,7 +483,7 @@ def clean_targets(clinind_data: dict):
                     output_to_loggers(removed_msg, "info", CONSOLE, UTILS)
 
                 # check if the target has parentheses with numbers in there
-                match = regex.search(r"(?P<panel_id>\(\d+\))", indiv_target)
+                match = re.search(r"(?P<panel_id>\(\d+\))", indiv_target)
 
                 # it's a panel, parentheses detected, really reliable
                 if match:
@@ -1035,7 +1034,7 @@ def gather_clinical_indication_data_django_json(
 
         # Create test_panel json
         for panel in panels_gathered:
-            if regex.match(r"[0-9*]", panel):
+            if re.match(r"[0-9*]", panel):
                 # it's a panelapp id
                 panel_pk = get_existing_object_pk(
                     panel_json, "panelapp_id", panel
