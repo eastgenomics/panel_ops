@@ -668,15 +668,14 @@ def create_objects_for_td(td_data, ci_to_keep):
                     clinical_indication=ci_obj
                 )
 
-        # else:
-            
-        #     output_to_loggers(
-        #         (
-        #             f"'{indication['panels']}' from '{indication['code']}' will not "
-        #             "be imported"
-        #         ),
-        #         "warning", MOD_DB, CONSOLE
-        #     )
+        else:
+            output_to_loggers(
+                (
+                    f"'{indication['code']}' will not be imported: "
+                    f"'{indication['panels']}'"
+                ),
+                "warning", MOD_DB, CONSOLE
+            )
 
     output_to_loggers(
         "Finished creating and importing objects in the database !",
