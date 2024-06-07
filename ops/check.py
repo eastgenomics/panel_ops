@@ -1,5 +1,5 @@
 from collections import defaultdict
-import regex
+import re
 
 from sqlalchemy import distinct
 
@@ -272,7 +272,7 @@ def check_clinical_indications(
             ).one()[0]
 
             # check whether it's a single gene panel or a normal panel
-            if regex.match(r"[0-9+]", panelapp_id):
+            if re.match(r"[0-9+]", panelapp_id):
                 # its a panelapp id
                 # check if the clinical indication contains the panel
                 if data["tests"] != []:
