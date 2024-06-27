@@ -1233,20 +1233,22 @@ def get_clinical_indication_through_genes(
                 panel2features_tb.c.panel_id == panel_id
             ).all()
 
-            # use the packaging package to parse the version and take the latest
-            # version
+            # use the packaging package to parse the version and take the
+            # latest version
             latest_version = get_latest_panel_version([d[2] for d in data])
             panel_genes = [(d[0], d[2], d[3], d[4]) for d in data]
             hgnc_ids = []
 
             for panel, panel_version, hgnc_id, panelapp_id in panel_genes:
                 ci_info = f"{ci}:{panelapp_id}"
+
                 if "|" in panel_version:
                     formatted_version = panel_version.split("|")
                 else:
                     formatted_version = [panel_version, ""]
 
-                # only get genes that are in the latest version of a given panel
+                # only get genes that are in the latest version of a given
+                # panel
                 if formatted_version == latest_version:
                     # filter gene if it's RNA
                     if filter_out_gene(hgnc_data[hgnc_id], "locus_type", "RNA"):
@@ -1329,12 +1331,14 @@ def parse_panel_form(panel_form: str):
     return data, add_on_bool
 
 
-def get_latest_clinical_indication_data(query_result):
+def get_latest_clinical_indication_data(session, meta, query_result):
     """ Get the latest clinical indication data using ci_version field
     Args:
+        session (SQLAlchemy Session): SQLAlchemy Session
+        meta (SQLAlchemy Meta): SQLAlchemy Meta
         query_result (SQLAlchemy query): Result of SQLAlchemy query
     Returns:
-        dict: Dict containing the most recent clinical indication and its 
+        dict: Dict containing the most recent clinical indication and its
         linked panels
     """
 
@@ -1346,18 +1350,45 @@ def get_latest_clinical_indication_data(query_result):
         source, version = ci_version.split("_")
         dated_version = datetime.date.fromisoformat(version)
 
-        # compare dates between stored date and new date
+        # we already have a panel for that clinical indication
         if gemini_name in ci2panels:
-            # all dates stored should have the same date so select first
-            # element of list of tuples and get the date of the ci2panel link
-            stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
-            dated_stored_version = datetime.date.fromisoformat(stored_version)
+            panel_tb = meta.tables["panel"]
 
-            # if new date is higher replace all stored dates
-            if dated_version > dated_stored_version:
-                ci2panels[gemini_name] = [(panel_id, ci_version)]
-            # date identical we need to store the incoming date and panel id
-            elif dated_version == dated_stored_version:
+            # get the panel name from the panel id
+            incoming_panel_name = session.query(panel_tb.c.name).filter(
+                panel_tb.c.id == panel_id
+            ).one()
+
+            # bool flag to know if the checking of date is necessary
+            check_date = False
+
+            # check all the stored panel names and if the names are identical,
+            # activate the checking date flag
+            for stored_panel_id, stored_panel_version in ci2panels[gemini_name]:
+                stored_panel_name = session.query(panel_tb.c.name).filter(
+                    panel_tb.c.id == stored_panel_id
+                ).one()
+
+                if stored_panel_name == incoming_panel_name:
+                    check_date = True
+
+            # compare dates between stored date and new date
+            if check_date:
+                # all dates stored should have the same date so select first
+                # element of list of tuples and get the date of the ci2panel
+                # link
+                stored_source, stored_version = ci2panels[gemini_name][0][1].split("_")
+                dated_stored_version = datetime.date.fromisoformat(stored_version)
+
+                # if new date is higher replace all stored dates
+                if dated_version > dated_stored_version:
+                    ci2panels[gemini_name] = [(panel_id, ci_version)]
+
+                # date identical we need to store the incoming date and panel
+                # id
+                elif dated_version == dated_stored_version:
+                    ci2panels[gemini_name].append((panel_id, ci_version))
+            else:
                 ci2panels[gemini_name].append((panel_id, ci_version))
 
         # unseen clinical indication
