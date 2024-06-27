@@ -84,7 +84,7 @@ def generate_genepanels(session, meta, hgnc_data: dict):
         ci2panels_tb, ci_tb.c.id == ci2panels_tb.c.clinical_indication_id
     ).all()
 
-    ci2panels = get_latest_clinical_indication_data(cis)
+    ci2panels = get_latest_clinical_indication_data(session, meta, cis)
 
     gemini2genes = get_clinical_indication_through_genes(
         session, meta, ci2panels, hgnc_data
